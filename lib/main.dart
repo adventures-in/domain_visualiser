@@ -10,18 +10,23 @@ class AppWidget extends StatefulWidget {
 }
 
 class _AppWidgetState extends State<AppWidget> {
-  final _offsets = <Offset>[];
+  Offset _start = Offset.zero;
+  Offset _end = Offset.zero;
+
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: ShapePainter(),
+      painter: ShapePainter(_start, _end),
       child: Container(
         child: GestureDetector(
           onPanStart: (details) {
-            print('${details.globalPosition}');
+            setState(() {
+              _start = details.globalPosition;
+              _end = details.globalPosition;
+            });
           },
           onPanUpdate: (details) {
-            print('${details.globalPosition}');
+            setState(() => _end = details.globalPosition);
           },
         ),
       ),
@@ -30,6 +35,16 @@ class _AppWidgetState extends State<AppWidget> {
 }
 
 class ShapePainter extends CustomPainter {
+  final Offset _start;
+  final Offset _end;
+
+  ShapePainter(Offset start, Offset end)
+      : _start = start,
+        _end = end;
+
+  Offset get start => _start;
+  Offset get end => _end;
+
   @override
   void paint(Canvas canvas, Size size) {
     var paint = Paint()
@@ -37,14 +52,11 @@ class ShapePainter extends CustomPainter {
       ..strokeWidth = 5
       ..strokeCap = StrokeCap.round;
 
-    Offset startingPoint = Offset(0, size.height / 2);
-    Offset endingPoint = Offset(size.width, size.height / 2);
-
-    canvas.drawLine(startingPoint, endingPoint, paint);
+    canvas.drawRect(Rect.fromPoints(_start, _end), paint);
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) {
-    return true;
+  bool shouldRepaint(ShapePainter oldDelegate) {
+    return _start != oldDelegate.start || _end != oldDelegate.end;
   }
 }
