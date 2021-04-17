@@ -16,8 +16,9 @@ class _AppWidgetState extends State<AppWidget> {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: ShapePainter(_start, _end),
+      foregroundPainter: ShapePainter(_start, _end),
       child: Container(
+        color: Colors.white,
         child: GestureDetector(
           onPanStart: (details) {
             setState(() {
@@ -49,10 +50,19 @@ class ShapePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     var paint = Paint()
       ..color = Colors.teal
-      ..strokeWidth = 5
+      ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
 
-    canvas.drawRect(Rect.fromPoints(_start, _end), paint);
+    final rect = Rect.fromPoints(_start, _end);
+    final path = Path()..addRect(rect);
+
+    canvas.drawShadow(path.shift(Offset(2, 2)), Colors.black, 2.0, true);
+    canvas.drawPath(path, Paint()..color = Colors.white);
+
+    canvas.drawLine(rect.bottomLeft, rect.bottomRight, paint);
+    canvas.drawLine(rect.bottomRight, rect.topRight, paint);
+    canvas.drawLine(rect.topRight, rect.topLeft, paint);
+    canvas.drawLine(rect.topLeft, rect.bottomLeft, paint);
   }
 
   @override
