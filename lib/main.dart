@@ -11,23 +11,28 @@ class AppWidget extends StatefulWidget {
 
 class _AppWidgetState extends State<AppWidget> {
   Offset _start = Offset.zero;
-  Offset _end = Offset.zero;
+  Rect _currentRect = Rect.fromPoints(Offset.zero, Offset.zero);
+
+  final _linePaint = Paint()
+    ..color = Colors.blue
+    ..strokeWidth = 3
+    ..strokeCap = StrokeCap.round;
+
+  final _fillPaint = Paint()..color = Colors.grey[100]!;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      foregroundPainter: ShapePainter(_start, _end),
+      foregroundPainter: ShapePainter(_currentRect, _linePaint, _fillPaint),
       child: Container(
         color: Colors.white,
         child: GestureDetector(
           onPanStart: (details) {
-            setState(() {
-              _start = details.globalPosition;
-              _end = details.globalPosition;
-            });
+            setState(() => _start = details.globalPosition);
           },
           onPanUpdate: (details) {
-            setState(() => _end = details.globalPosition);
+            setState(() =>
+                _currentRect = Rect.fromPoints(_start, details.globalPosition));
           },
         ),
       ),
@@ -36,37 +41,30 @@ class _AppWidgetState extends State<AppWidget> {
 }
 
 class ShapePainter extends CustomPainter {
-  final Offset _start;
-  final Offset _end;
+  final Rect _rect;
+  final Paint _linePaint;
+  final Paint _fillPaint;
 
-  ShapePainter(Offset start, Offset end)
-      : _start = start,
-        _end = end;
+  ShapePainter(Rect rect, Paint linePaint, Paint fillPaint)
+      : _rect = rect,
+        _linePaint = linePaint,
+        _fillPaint = fillPaint;
 
-  Offset get start => _start;
-  Offset get end => _end;
+  Rect get rect => _rect;
 
   @override
   void paint(Canvas canvas, Size size) {
-    var paint = Paint()
-      ..color = Colors.teal
-      ..strokeWidth = 3
-      ..strokeCap = StrokeCap.round;
+    final path = Path()..addRect(_rect);
 
-    final rect = Rect.fromPoints(_start, _end);
-    final path = Path()..addRect(rect);
+    canvas.drawShadow(path.shift(Offset(2, 2)), Colors.black, 1.0, true);
+    canvas.drawPath(path, _fillPaint);
 
-    canvas.drawShadow(path.shift(Offset(2, 2)), Colors.black, 2.0, true);
-    canvas.drawPath(path, Paint()..color = Colors.white);
-
-    canvas.drawLine(rect.bottomLeft, rect.bottomRight, paint);
-    canvas.drawLine(rect.bottomRight, rect.topRight, paint);
-    canvas.drawLine(rect.topRight, rect.topLeft, paint);
-    canvas.drawLine(rect.topLeft, rect.bottomLeft, paint);
+    canvas.drawLine(_rect.bottomLeft, _rect.bottomRight, _linePaint);
+    canvas.drawLine(_rect.bottomRight, _rect.topRight, _linePaint);
+    canvas.drawLine(_rect.topRight, _rect.topLeft, _linePaint);
+    canvas.drawLine(_rect.topLeft, _rect.bottomLeft, _linePaint);
   }
 
   @override
-  bool shouldRepaint(ShapePainter oldDelegate) {
-    return _start != oldDelegate.start || _end != oldDelegate.end;
-  }
+  bool shouldRepaint(ShapePainter old) => _rect != old.rect;
 }
