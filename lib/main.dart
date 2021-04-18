@@ -11,7 +11,8 @@ class AppWidget extends StatefulWidget {
 
 class _AppWidgetState extends State<AppWidget> {
   Offset _start = Offset.zero;
-  Rect _currentRect = Rect.fromPoints(Offset.zero, Offset.zero);
+  Rect _creatingRect = Rect.fromPoints(Offset.zero, Offset.zero);
+  final List<Rect> _rects = [];
 
   final _linePaint = Paint()
     ..color = Colors.blue
@@ -23,17 +24,20 @@ class _AppWidgetState extends State<AppWidget> {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      foregroundPainter: ShapePainter(_currentRect, _linePaint, _fillPaint),
+      foregroundPainter:
+          ShapePainter(_rects, _creatingRect, _linePaint, _fillPaint),
       child: Container(
         color: Colors.white,
         child: GestureDetector(
+          onTapUp: (details) => print('Tap: $details'),
           onPanStart: (details) {
             setState(() => _start = details.globalPosition);
           },
           onPanUpdate: (details) {
-            setState(() =>
-                _currentRect = Rect.fromPoints(_start, details.globalPosition));
+            setState(() => _creatingRect =
+                Rect.fromPoints(_start, details.globalPosition));
           },
+          onPanEnd: (details) => _rects.add(_creatingRect),
         ),
       ),
     );
@@ -41,30 +45,41 @@ class _AppWidgetState extends State<AppWidget> {
 }
 
 class ShapePainter extends CustomPainter {
-  final Rect _rect;
+  final List<Rect> _rects;
+  final Rect? _creatingRect;
   final Paint _linePaint;
   final Paint _fillPaint;
 
-  ShapePainter(Rect rect, Paint linePaint, Paint fillPaint)
-      : _rect = rect,
+  ShapePainter(
+      List<Rect> rects, Rect? creatingRect, Paint linePaint, Paint fillPaint)
+      : _rects = rects,
+        _creatingRect = creatingRect,
         _linePaint = linePaint,
         _fillPaint = fillPaint;
 
-  Rect get rect => _rect;
+  Rect? get creatingRect => _creatingRect;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = Path()..addRect(_rect);
+    for (final rect in _rects) {
+      drawClassBox(canvas, rect);
+    }
+
+    if (_creatingRect != null) drawClassBox(canvas, _creatingRect!);
+  }
+
+  @override
+  bool shouldRepaint(ShapePainter old) => _creatingRect != old.creatingRect;
+
+  void drawClassBox(Canvas canvas, Rect rect) {
+    final path = Path()..addRect(rect);
 
     canvas.drawShadow(path.shift(Offset(2, 2)), Colors.black, 1.0, true);
     canvas.drawPath(path, _fillPaint);
 
-    canvas.drawLine(_rect.bottomLeft, _rect.bottomRight, _linePaint);
-    canvas.drawLine(_rect.bottomRight, _rect.topRight, _linePaint);
-    canvas.drawLine(_rect.topRight, _rect.topLeft, _linePaint);
-    canvas.drawLine(_rect.topLeft, _rect.bottomLeft, _linePaint);
+    canvas.drawLine(rect.bottomLeft, rect.bottomRight, _linePaint);
+    canvas.drawLine(rect.bottomRight, rect.topRight, _linePaint);
+    canvas.drawLine(rect.topRight, rect.topLeft, _linePaint);
+    canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
   }
-
-  @override
-  bool shouldRepaint(ShapePainter old) => _rect != old.rect;
 }
