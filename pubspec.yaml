@@ -12,9 +12,41 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # auth
+  firebase_auth: any
+  google_sign_in: any
+  sign_in_with_apple: any
+  
+  # database
+  firebase_database: any
+
+  # firebase 
+  firebase_core: any
+
+  # freezed
+  freezed_annotation: any
+  json_serializable: any
+
+  # redux
+  redux: any
+  flutter_redux: any
+  redux_remote_devtools: any
+
+  # utils 
+  fast_immutable_collections: any
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
+  test: any
+  mockito: any
+
+  build_runner: any
+  freezed: any
+  json_serializable_fic: any
+
 flutter:
   uses-material-design: true
+  assets:
+    - assets/
