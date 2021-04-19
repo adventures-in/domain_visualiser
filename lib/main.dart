@@ -12,7 +12,7 @@ class AppWidget extends StatefulWidget {
 
 class _AppWidgetState extends State<AppWidget> {
   Offset _start = Offset.zero;
-  ClassBox _creatingBox = ClassBox(Offset.zero, Offset.zero);
+  ClassBox? _creatingBox;
   final List<ClassBox> _boxes = [];
 
   final _linePaint = Paint()
@@ -30,16 +30,18 @@ class _AppWidgetState extends State<AppWidget> {
       child: Container(
         color: Colors.white,
         child: GestureDetector(
-          onTapUp: (details) => print('Tap: $details'),
-          onPanStart: (details) {
-            setState(() => _start = details.globalPosition);
-          },
-          onPanUpdate: (details) {
-            setState(
-                () => _creatingBox = ClassBox(_start, details.globalPosition));
-          },
-          onPanEnd: (details) => _boxes.add(_creatingBox),
-        ),
+            onTapUp: (details) => print('Tap: $details'),
+            onPanStart: (details) {
+              setState(() => _start = details.globalPosition);
+            },
+            onPanUpdate: (details) {
+              setState(() => _creatingBox =
+                  ClassBox.fromPoints(_start, details.globalPosition));
+            },
+            onPanEnd: (details) {
+              _boxes.add(_creatingBox!);
+              _creatingBox = null;
+            }),
       ),
     );
   }
