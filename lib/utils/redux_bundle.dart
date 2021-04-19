@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:domain_visualiser/middleware/app_middleware.dart';
 import 'package:domain_visualiser/models/app_state/app_state.dart';
 import 'package:domain_visualiser/reducers/app_reducer.dart';
@@ -14,14 +15,17 @@ class ReduxBundle {
   static var _bucketName = 'gs://crowdleague-profile-pics';
   static var _extraMiddlewares = <Middleware<AppState>>[];
   static var _storeOperations = <StoreOperation>[];
+  static firestore.Settings? _firestoreSettings;
 
   static void setup(
       {String? bucketName,
       List<Middleware<AppState>>? extraMiddlewares,
-      List<StoreOperation>? storeOperations}) {
+      List<StoreOperation>? storeOperations,
+      firestore.Settings? firestoreSettings}) {
     _bucketName = bucketName ?? _bucketName;
     _extraMiddlewares = extraMiddlewares ?? _extraMiddlewares;
     _storeOperations = storeOperations ?? _storeOperations;
+    _firestoreSettings = firestoreSettings;
   }
 
   /// Services
@@ -54,6 +58,11 @@ class ReduxBundle {
     // now that we have a store, run any store operations that were added
     for (final operation in _storeOperations) {
       await operation.runOn(_store);
+    }
+
+    // finally, if firestore settings were added, set the instance to use them
+    if (_firestoreSettings != null) {
+      firestore.FirebaseFirestore.instance.settings = _firestoreSettings!;
     }
 
     return _store;
