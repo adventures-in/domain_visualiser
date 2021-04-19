@@ -1,3 +1,4 @@
+import 'package:domain_visualiser/models/class_box.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -11,8 +12,8 @@ class AppWidget extends StatefulWidget {
 
 class _AppWidgetState extends State<AppWidget> {
   Offset _start = Offset.zero;
-  Rect _creatingRect = Rect.fromPoints(Offset.zero, Offset.zero);
-  final List<Rect> _rects = [];
+  ClassBox _creatingBox = ClassBox(Offset.zero, Offset.zero);
+  final List<ClassBox> _boxes = [];
 
   final _linePaint = Paint()
     ..color = Colors.blue
@@ -25,7 +26,7 @@ class _AppWidgetState extends State<AppWidget> {
   Widget build(BuildContext context) {
     return CustomPaint(
       foregroundPainter:
-          ShapePainter(_rects, _creatingRect, _linePaint, _fillPaint),
+          ShapePainter(_boxes, _creatingBox, _linePaint, _fillPaint),
       child: Container(
         color: Colors.white,
         child: GestureDetector(
@@ -34,10 +35,10 @@ class _AppWidgetState extends State<AppWidget> {
             setState(() => _start = details.globalPosition);
           },
           onPanUpdate: (details) {
-            setState(() => _creatingRect =
-                Rect.fromPoints(_start, details.globalPosition));
+            setState(
+                () => _creatingBox = ClassBox(_start, details.globalPosition));
           },
-          onPanEnd: (details) => _rects.add(_creatingRect),
+          onPanEnd: (details) => _boxes.add(_creatingBox),
         ),
       ),
     );
@@ -45,41 +46,48 @@ class _AppWidgetState extends State<AppWidget> {
 }
 
 class ShapePainter extends CustomPainter {
-  final List<Rect> _rects;
-  final Rect? _creatingRect;
+  final List<ClassBox> _boxes;
+  final ClassBox? _creatingBox;
   final Paint _linePaint;
   final Paint _fillPaint;
 
-  ShapePainter(
-      List<Rect> rects, Rect? creatingRect, Paint linePaint, Paint fillPaint)
-      : _rects = rects,
-        _creatingRect = creatingRect,
+  ShapePainter(List<ClassBox> boxes, ClassBox? creatingBox, Paint linePaint,
+      Paint fillPaint)
+      : _boxes = boxes,
+        _creatingBox = creatingBox,
         _linePaint = linePaint,
         _fillPaint = fillPaint;
 
-  Rect? get creatingRect => _creatingRect;
+  ClassBox? get creatingBox => _creatingBox;
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (final rect in _rects) {
-      drawClassBox(canvas, rect);
+    for (final box in _boxes) {
+      drawClassBox(canvas, box);
     }
 
-    if (_creatingRect != null) drawClassBox(canvas, _creatingRect!);
+    if (_creatingBox != null) drawClassBox(canvas, _creatingBox!);
   }
 
   @override
-  bool shouldRepaint(ShapePainter old) => _creatingRect != old.creatingRect;
+  bool shouldRepaint(ShapePainter old) => _creatingBox != old.creatingBox;
 
-  void drawClassBox(Canvas canvas, Rect rect) {
+  // Note: order is important
+  void drawClassBox(Canvas canvas, ClassBox box) {
+    final rect = box.rect;
     final path = Path()..addRect(rect);
 
+    // draw shadow and fill
     canvas.drawShadow(path.shift(Offset(2, 2)), Colors.black, 1.0, true);
     canvas.drawPath(path, _fillPaint);
 
+    // draw edges
     canvas.drawLine(rect.bottomLeft, rect.bottomRight, _linePaint);
     canvas.drawLine(rect.bottomRight, rect.topRight, _linePaint);
     canvas.drawLine(rect.topRight, rect.topLeft, _linePaint);
+    canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
+
+    // draw line in the middle
     canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
   }
 }
