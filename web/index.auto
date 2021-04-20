@@ -13,9 +13,12 @@
   -->
   <base href="/">
 
+  <!-- Required for google_sign_in -->
+  <meta name="google-signin-client_id" content="143705622137-kt5fjvb0u241p722h8pgq6tshfdqt6ob.apps.googleusercontent.com">
+
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Domain Visualiser">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -27,6 +30,15 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!-- Firebase App (the core Firebase SDK) is always required and must be listed first -->
+  <script src="/__/firebase/8.4.1/firebase-app.js"></script>
+  <!-- Other Firebase products -->
+  <script src="/__/firebase/8.4.1/firebase-auth.js"></script>
+  <script src="/__/firebase/8.4.1/firebase-firestore.js"></script>
+  <!-- Initialize Firebase -->
+  <script src="/__/firebase/init.js"></script>
+  </script>
+
   <!-- This script installs service_worker.js to provide PWA functionality to
        application. For more information, see:
        https://developers.google.com/web/fundamentals/primers/service-workers -->
