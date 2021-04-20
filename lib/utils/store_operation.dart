@@ -1,4 +1,4 @@
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:redux/redux.dart';
 
 typedef Operation = Future<void> Function(Store<AppState> store);

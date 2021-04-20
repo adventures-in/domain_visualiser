@@ -1,6 +1,6 @@
-import 'package:domain_visualiser/actions/app_init/plumb_streams_action.dart';
+import 'package:domain_visualiser/actions/app-init/plumb_streams_action.dart';
 import 'package:domain_visualiser/extensions/redux/store_extensions.dart';
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/services/auth_service.dart';
 import 'package:domain_visualiser/services/database_service.dart';
 import 'package:redux/redux.dart';

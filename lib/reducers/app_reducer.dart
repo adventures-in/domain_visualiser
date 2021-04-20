@@ -1,4 +1,4 @@
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/reducers/auth/sign_out.dart';
 import 'package:domain_visualiser/reducers/auth/store_auth_step.dart';
 import 'package:domain_visualiser/reducers/auth/store_auth_user_data.dart';

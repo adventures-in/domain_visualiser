@@ -1,5 +1,5 @@
 import 'package:domain_visualiser/actions/settings/update_settings_action.dart';
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:redux/redux.dart';
 
 class UpdateSettingsReducer

@@ -1,5 +1,5 @@
 import 'package:domain_visualiser/enums/auth/auth_step_enum.dart';
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/models/auth/auth_user_data.dart';
 import 'package:domain_visualiser/widgets/auth/auth_page.dart';
 import 'package:domain_visualiser/widgets/drawing_page.dart';

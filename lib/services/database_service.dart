@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:domain_visualiser/actions/domain-objects/store_class_boxes_action.dart';
-import 'package:domain_visualiser/actions/profile/store_profile_data_action.dart';
 import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/enums/database/database_section_enum.dart';
 import 'package:domain_visualiser/extensions/firebase/firestore_extensions.dart';
 import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
 import 'package:domain_visualiser/models/domain-objects/class_box.dart';
+import 'package:domain_visualiser/models/shared/database_section.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 
 class DatabaseService {
@@ -36,20 +36,16 @@ class DatabaseService {
       : _firestore = database ?? FirebaseFirestore.instance,
         _eventsController = eventsController ?? StreamController<ReduxAction>();
 
-  /// Observe the document at /profiles/${uid} and convert each
-  /// [DocumentSnapshot] into a [ReduxAction] then send to the store using the
-  /// passed in [StreamController].
-  void connectProfileData({required String uid}) {
-    final dbSection = DatabaseSectionEnum.profileData;
-
+  /// Observe a collection at [section.location] and convert the resultant
+  /// [DocumentSnapshot] into a [ReduxAction] to send to the store.
+  void connect(DatabaseSection section) {
     try {
       // connect the database to the store and keep the subscription
-      subscriptions[dbSection] =
-          _firestore.doc('profiles/$uid').snapshots().listen((docSnapshot) {
+      subscriptions[section.id] =
+          _firestore.doc(section.location).snapshots().listen((snapshot) {
         try {
-          if (docSnapshot.exists) {
-            _eventsController
-                .add(StoreProfileDataAction(data: docSnapshot.toProfileData()));
+          if (snapshot.exists) {
+            _eventsController.add(snapshot.toStoreAction(section.id));
           }
         } catch (error, trace) {
           _eventsController.addProblem(error, trace);
@@ -60,8 +56,8 @@ class DatabaseService {
     }
   }
 
-  void disconnect(DatabaseSectionEnum dbSection) =>
-      subscriptions[dbSection]?.cancel();
+  void disconnect(DatabaseSection section) =>
+      subscriptions[section.id]?.cancel();
 
   Future<void> saveClassBox(ClassBox box) async {
     try {

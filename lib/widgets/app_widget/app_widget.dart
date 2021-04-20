@@ -1,10 +1,10 @@
-import 'package:domain_visualiser/actions/app_init/plumb_streams_action.dart';
+import 'package:domain_visualiser/actions/app-init/plumb_streams_action.dart';
 import 'package:domain_visualiser/actions/auth/observe_auth_state_action.dart';
 import 'package:domain_visualiser/actions/navigation/remove_current_page_action.dart';
 import 'package:domain_visualiser/actions/platform/detect_platform_action.dart';
 import 'package:domain_visualiser/extensions/page_data_extensions.dart';
 import 'package:domain_visualiser/extensions/settings_extensions.dart';
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/models/navigation/page_data/page_data.dart';
 import 'package:domain_visualiser/models/settings/settings.dart';
 import 'package:domain_visualiser/services/wrappers/firebase_wrapper.dart';

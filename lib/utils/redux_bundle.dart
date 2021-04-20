@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
 import 'package:domain_visualiser/middleware/app_middleware.dart';
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/reducers/app_reducer.dart';
 import 'package:domain_visualiser/services/auth_service.dart';
 import 'package:domain_visualiser/services/database_service.dart';

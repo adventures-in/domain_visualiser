@@ -74,8 +74,10 @@ class ShapePainter extends CustomPainter {
       drawClassBox(canvas, box);
     }
 
-    if (_selectedClassBox != null)
+    if (_selectedClassBox != null) {
       drawSelectedClassBox(canvas, _selectedClassBox!);
+    }
+
     if (_creatingRect != null) drawCreatingRect(canvas, _creatingRect!);
   }
 
