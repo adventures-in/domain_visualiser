@@ -34,6 +34,7 @@ dependencies:
   redux_remote_devtools: any
 
   # utils 
+  uuid: any
   fast_immutable_collections: any
 
 dev_dependencies:

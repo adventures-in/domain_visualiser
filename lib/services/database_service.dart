@@ -65,7 +65,7 @@ class DatabaseService {
 
   Future<void> saveClassBox(ClassBox box) async {
     try {
-      await _firestore.doc('domain-objects/$box.id').set(box.toJson());
+      await _firestore.doc('domain-objects/${box.id}').set(box.toJson());
     } catch (error, trace) {
       _eventsController.addProblem(error, trace);
     }

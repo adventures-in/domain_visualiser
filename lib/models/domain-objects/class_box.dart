@@ -7,7 +7,8 @@ part 'class_box.g.dart';
 @freezed
 class ClassBox with _$ClassBox {
   factory ClassBox(
-      {required double left,
+      {required String id,
+      required double left,
       required double top,
       required double right,
       required double bottom,

@@ -20,6 +20,7 @@ extension ConvertDocumentSnapshot on DocumentSnapshot {
 
 extension ConvertQueryDocumentSnapshot on QueryDocumentSnapshot {
   ClassBox toClassBox() => ClassBox(
+      id: id,
       left: data()['left'] as double,
       top: data()['top'] as double,
       right: data()['right'] as double,
