@@ -1,12 +1,13 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:domain_visualiser/actions/domain-objects/store_class_boxes_action.dart';
 import 'package:domain_visualiser/actions/profile/store_profile_data_action.dart';
 import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/enums/database/database_section_enum.dart';
-import 'package:domain_visualiser/extensions/actions_stream_controller_extensions.dart';
-import 'package:domain_visualiser/extensions/firestore_extensions.dart';
-import 'package:domain_visualiser/models/class_box.dart';
+import 'package:domain_visualiser/extensions/firebase/firestore_extensions.dart';
+import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
+import 'package:domain_visualiser/models/domain-objects/class_box.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 
 class DatabaseService {
@@ -24,7 +25,7 @@ class DatabaseService {
   /// Keep track of the subscriptions so we can cancel them later.
   Map<DatabaseSectionEnum, StreamSubscription> subscriptions = {};
 
-  /// The [_storeController] is connected to the redux [Store] via [storeStrea]
+  /// The [_eventsController] is connected to the redux [Store] via [storeStream]
   /// and is used by the [DatabaseService] to add actions to the stream where
   /// they will be dispatched by the store.
   final StreamController<ReduxAction> _eventsController;
@@ -35,7 +36,7 @@ class DatabaseService {
       : _firestore = database ?? FirebaseFirestore.instance,
         _eventsController = eventsController ?? StreamController<ReduxAction>();
 
-  /// Observe the document at /adventurers/${uid} and convert each
+  /// Observe the document at /profiles/${uid} and convert each
   /// [DocumentSnapshot] into a [ReduxAction] then send to the store using the
   /// passed in [StreamController].
   void connectProfileData({required String uid}) {
@@ -62,31 +63,13 @@ class DatabaseService {
   void disconnect(DatabaseSectionEnum dbSection) =>
       subscriptions[dbSection]?.cancel();
 
-  // Future<void> createSection(
-  //     {required String uid, required String name}) async {
-  //   try {
-  //     await _firestore.doc('new/$uid').set(<String, Object>{
-  //       'section': {'name': name}
-  //     });
-
-  //     final dbSection = DatabaseSection.newEntries;
-  //     subscriptions[dbSection] =
-  //         _firestore.doc('new/$uid').snapshots().listen((doc) {
-  //       try {
-  //         if (!doc.exists) {
-  //           _eventsController
-  //               .add(UpdateSectionsVMAction(creatingNewSection: false));
-  //           subscriptions[dbSection]?.cancel();
-  //         }
-  //       } catch (error, trace) {
-  //         _eventsController.addProblem(error, trace);
-  //         subscriptions[dbSection]?.cancel();
-  //       }
-  //     }, onError: _eventsController.addProblem, cancelOnError: true);
-  //   } catch (error, trace) {
-  //     _eventsController.addProblem(error, trace);
-  //   }
-  // }
+  Future<void> saveClassBox(ClassBox box) async {
+    try {
+      await _firestore.doc('domain-objects/$box.id').set(box.toJson());
+    } catch (error, trace) {
+      _eventsController.addProblem(error, trace);
+    }
+  }
 
   /// Observe the collection at /sections/ and convert each
   /// [CollectionSnapshot] into a [ReduxAction] then send to the store using the
@@ -105,7 +88,7 @@ class DatabaseService {
           for (final querySnapshot in collectionSnapshot.docs) {
             list.add(querySnapshot.toClassBox());
           }
-          _eventsController.add(StoreClassBoxesAction(list: list.lock));
+          _eventsController.add(StoreClassBoxesAction(list.lock));
         } catch (error, trace) {
           _eventsController.addProblem(error, trace);
         }

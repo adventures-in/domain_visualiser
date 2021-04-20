@@ -1,4 +1,8 @@
-{   
+{
+  ///////////////////////////
+  // freezed
+  ///////////////////////////
+
   "freezed model": {
       "prefix": "freezed_model",
       "body": [
@@ -33,9 +37,50 @@
       ],
       "description": "freezed action"
   },
-  "extensions import": {
-    "prefix": "extensions_import",
-    "body": ["import 'package:domain_visualiser/extensions/${1}_extensions.dart';"],
-    "description": "extensions import"
+
+  ///////////////////////////
+  // extensions
+  ///////////////////////////
+
+  "import extensions": {
+      "prefix": "extensions import",
+      "body": [
+          "import 'package:${WORKSPACE_NAME}/extensions/extensions.dart';",
+      ],
+      "description": "extensions import"
+  },
+
+  ///////////////////////////
+  // redux
+  ///////////////////////////
+
+  "middleware class": {
+      "prefix": "mdlware",
+      "body": [
+          "import 'package:${WORKSPACE_NAME}/models/app_state/app_state.dart';",
+          "import 'package:redux/redux.dart';",
+          "",
+          "class ${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/g}Middleware extends TypedMiddleware<AppState, ${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/g}Action> {",
+          "\t${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/g}Middleware(${1/(.*)/${1:/pascalcase}/g}Service ${1}Service) : super((store, action, next) async {",
+          "\t\tnext(action);",
+          "",
+          "\t\tfinal  = await ${1/(.*)/${1:/pascalcase}/g}Service${2};",
+          "\t\tstore.dispatch();",
+          "\t});",
+          "}"
+      ],
+      "description": "middleware class"
+  },
+  "reducer class": {
+      "prefix": "reducer",
+      "body": [
+          "import 'package:${WORKSPACE_NAME}/models/app_state/app_state.dart';",
+          "import 'package:redux/redux.dart';",
+          "",
+          "class ${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/g}Reducer extends TypedReducer<AppState, ${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/g}Action> {",
+          "\t${TM_FILENAME_BASE/(.*)/${1:/pascalcase}/g}Reducer() : super((state, action) => state.rebuild((b) => b..${1} = action.${1}));",
+          "}",
+      ],
+      "description": "reducer class"
   }
 }

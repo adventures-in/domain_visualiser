@@ -1,5 +1,5 @@
 import 'package:domain_visualiser/actions/problems/remove_problem_action.dart';
-import 'package:domain_visualiser/extensions/context_extensions.dart';
+import 'package:domain_visualiser/extensions/flutter/context_extensions.dart';
 import 'package:domain_visualiser/models/problems/problem.dart';
 import 'package:flutter/material.dart';
 

@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:domain_visualiser/models/class_box.dart';
+import 'package:domain_visualiser/models/domain-objects/class_box.dart';
 import 'package:domain_visualiser/models/profile/profile_data.dart';
-import 'package:flutter/painting.dart';
 
 extension ConvertDocumentSnapshot on DocumentSnapshot {
   ProfileData toProfileData() {
@@ -21,7 +20,9 @@ extension ConvertDocumentSnapshot on DocumentSnapshot {
 
 extension ConvertQueryDocumentSnapshot on QueryDocumentSnapshot {
   ClassBox toClassBox() => ClassBox(
-        Rect.fromLTRB(data()['left'] as double, data()['top'] as double,
-            data()['right'] as double, data()['bottom'] as double),
-      );
+      left: data()['left'] as double,
+      top: data()['top'] as double,
+      right: data()['right'] as double,
+      bottom: data()['bottom'] as double,
+      name: data()['name'] as String);
 }

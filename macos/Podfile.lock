@@ -1,4 +1,9 @@
 PODS:
+  - cloud_firestore (1.0.5):
+    - Firebase/CoreOnly (~> 7.4.0)
+    - Firebase/Firestore (~> 7.4.0)
+    - firebase_core
+    - FlutterMacOS
   - Firebase/Auth (7.4.0):
     - Firebase/CoreOnly
     - FirebaseAuth (~> 7.4.0)
@@ -7,6 +12,9 @@ PODS:
   - Firebase/Database (7.4.0):
     - Firebase/CoreOnly
     - FirebaseDatabase (~> 7.4.0)
+  - Firebase/Firestore (7.4.0):
+    - Firebase/CoreOnly
+    - FirebaseFirestore (~> 7.4.0)
   - firebase_auth (1.1.0):
     - Firebase/Auth (~> 7.4.0)
     - Firebase/CoreOnly (~> 7.4.0)
@@ -70,6 +78,7 @@ PODS:
     - FlutterMacOS
 
 DEPENDENCIES:
+  - cloud_firestore (from `Flutter/ephemeral/.symlinks/plugins/cloud_firestore/macos`)
   - firebase_auth (from `Flutter/ephemeral/.symlinks/plugins/firebase_auth/macos`)
   - firebase_core (from `Flutter/ephemeral/.symlinks/plugins/firebase_core/macos`)
   - firebase_database (from `Flutter/ephemeral/.symlinks/plugins/firebase_database/macos`)
@@ -92,6 +101,8 @@ SPEC REPOS:
     - PromisesObjC
 
 EXTERNAL SOURCES:
+  cloud_firestore:
+    :path: Flutter/ephemeral/.symlinks/plugins/cloud_firestore/macos
   firebase_auth:
     :path: Flutter/ephemeral/.symlinks/plugins/firebase_auth/macos
   firebase_core:
@@ -112,6 +123,7 @@ CHECKOUT OPTIONS:
     :tag: 7.4.0
 
 SPEC CHECKSUMS:
+  cloud_firestore: 88e128b6f9af2fec9f275fcf6de203a5a6b04031
   Firebase: 09fb40287b6dfc8ee65f726fa0b788719d3f2a07
   firebase_auth: 4a7ca50098b55604fcb66a45a770995ba1084bbd
   firebase_core: ecbc7d00363f405de52fa3c9354ef8ef593a30c8
