@@ -1,5 +1,5 @@
 import 'package:domain_visualiser/models/navigation/page_data/page_data.dart';
-import 'package:domain_visualiser/widgets/app_widget/initial_page.dart';
+import 'package:domain_visualiser/widgets/app-init/initial_page.dart';
 import 'package:domain_visualiser/widgets/profile/profile_page.dart';
 import 'package:domain_visualiser/widgets/shared/problem_page.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
