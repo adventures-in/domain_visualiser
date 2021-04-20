@@ -7,23 +7,20 @@ import 'package:domain_visualiser/enums/database/database_section_enum.dart';
 import 'package:domain_visualiser/extensions/firebase/firestore_extensions.dart';
 import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
 import 'package:domain_visualiser/models/domain-objects/class_box.dart';
-import 'package:domain_visualiser/models/shared/database_section.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 
 class DatabaseService {
+  /// A map of DatabaseSectionEnum to database location
+  static const locationOf = <DatabaseSectionEnum, String>{
+    DatabaseSectionEnum.classBoxes: 'class-boxes',
+    DatabaseSectionEnum.profile: 'profile'
+  };
+
   /// The [FirebaseFirestore] instance
   final FirebaseFirestore _firestore;
 
-  /// The stream of the [_storeController] is used just once on app load, to
-  /// connect the [_storeController] to the redux [Store]
-  /// Functions that observe parts of the database thus don't return anything,
-  /// they just connect the store to the database and keep the subscription so
-  /// functions that disregard (stop observing) that part of the database just
-  /// cancel the subscription.
-  Stream<ReduxAction> get storeStream => _eventsController.stream;
-
   /// Keep track of the subscriptions so we can cancel them later.
-  Map<DatabaseSectionEnum, StreamSubscription> subscriptions = {};
+  final Map<DatabaseSectionEnum, StreamSubscription> _subscriptions = {};
 
   /// The [_eventsController] is connected to the redux [Store] via [storeStream]
   /// and is used by the [DatabaseService] to add actions to the stream where
@@ -38,14 +35,14 @@ class DatabaseService {
 
   /// Observe a collection at [section.location] and convert the resultant
   /// [DocumentSnapshot] into a [ReduxAction] to send to the store.
-  void connect(DatabaseSection section) {
+  void connect(DatabaseSectionEnum section) {
     try {
       // connect the database to the store and keep the subscription
-      subscriptions[section.id] =
-          _firestore.doc(section.location).snapshots().listen((snapshot) {
+      _subscriptions[section] =
+          _firestore.doc(locationOf[section]!).snapshots().listen((snapshot) {
         try {
           if (snapshot.exists) {
-            _eventsController.add(snapshot.toStoreAction(section.id));
+            _eventsController.add(snapshot.toStoreAction(section));
           }
         } catch (error, trace) {
           _eventsController.addProblem(error, trace);
@@ -56,8 +53,8 @@ class DatabaseService {
     }
   }
 
-  void disconnect(DatabaseSection section) =>
-      subscriptions[section.id]?.cancel();
+  void disconnect(DatabaseSectionEnum section) =>
+      _subscriptions[section]?.cancel();
 
   Future<void> saveClassBox(ClassBox box) async {
     try {
@@ -75,7 +72,7 @@ class DatabaseService {
 
     try {
       // connect the database to the store and keep the subscription
-      subscriptions[dbSection] = _firestore
+      _subscriptions[dbSection] = _firestore
           .collection('class-boxes')
           .snapshots()
           .listen((collectionSnapshot) {
@@ -93,4 +90,12 @@ class DatabaseService {
       _eventsController.addProblem(error, trace);
     }
   }
+
+  /// The stream of the [_storeController] is used just once on app load, to
+  /// connect the [_storeController] to the redux [Store]
+  /// Functions that observe parts of the database thus don't return anything,
+  /// they just connect the store to the database and keep the subscription so
+  /// functions that disregard (stop observing) that part of the database just
+  /// cancel the subscription.
+  Stream<ReduxAction> get storeStream => _eventsController.stream;
 }
