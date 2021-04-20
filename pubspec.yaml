@@ -17,8 +17,9 @@ dependencies:
   google_sign_in: any
   sign_in_with_apple: any
   
-  # database
+  # databases
   firebase_database: any
+  cloud_firestore: any
 
   # firebase 
   firebase_core: any
@@ -33,6 +34,7 @@ dependencies:
   redux_remote_devtools: any
 
   # utils 
+  uuid: any
   fast_immutable_collections: any
 
 dev_dependencies:

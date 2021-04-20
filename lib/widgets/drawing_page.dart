@@ -1,4 +1,8 @@
-import 'package:domain_visualiser/models/class_box.dart';
+import 'package:domain_visualiser/actions/domain-objects/save_new_class_box_action.dart';
+import 'package:domain_visualiser/extensions/drawing/rect_extensions.dart';
+import 'package:domain_visualiser/extensions/flutter/context_extensions.dart';
+import 'package:domain_visualiser/extensions/models/class_box_extensions.dart';
+import 'package:domain_visualiser/models/domain-objects/class_box.dart';
 import 'package:flutter/material.dart';
 
 class DrawingPage extends StatefulWidget {
@@ -8,7 +12,8 @@ class DrawingPage extends StatefulWidget {
 
 class _DrawingPageState extends State<DrawingPage> {
   Offset _start = Offset.zero;
-  ClassBox? _creatingBox;
+  Rect? _creatingRect;
+  ClassBox? _selectedClassBox;
   final List<ClassBox> _boxes = [];
 
   final _linePaint = Paint()
@@ -21,8 +26,8 @@ class _DrawingPageState extends State<DrawingPage> {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      foregroundPainter:
-          ShapePainter(_boxes, _creatingBox, _linePaint, _fillPaint),
+      foregroundPainter: ShapePainter(
+          _boxes, _selectedClassBox, _creatingRect, _linePaint, _fillPaint),
       child: Container(
         color: Colors.white,
         child: GestureDetector(
@@ -31,12 +36,15 @@ class _DrawingPageState extends State<DrawingPage> {
               setState(() => _start = details.globalPosition);
             },
             onPanUpdate: (details) {
-              setState(() => _creatingBox =
-                  ClassBox.fromPoints(_start, details.globalPosition));
+              setState(() => _creatingRect =
+                  Rect.fromPoints(_start, details.globalPosition));
             },
             onPanEnd: (details) {
-              _boxes.add(_creatingBox!);
-              _creatingBox = null;
+              // dispatch action to save class box
+              final newClassBox = _creatingRect!.toClassBox();
+              context.dispatch(SaveNewClassBoxAction(newClassBox));
+              _selectedClassBox = newClassBox;
+              _creatingRect = null;
             }),
       ),
     );
@@ -45,18 +53,20 @@ class _DrawingPageState extends State<DrawingPage> {
 
 class ShapePainter extends CustomPainter {
   final List<ClassBox> _boxes;
-  final ClassBox? _creatingBox;
+  final ClassBox? _selectedClassBox;
+  final Rect? _creatingRect;
   final Paint _linePaint;
   final Paint _fillPaint;
 
-  ShapePainter(List<ClassBox> boxes, ClassBox? creatingBox, Paint linePaint,
-      Paint fillPaint)
+  ShapePainter(List<ClassBox> boxes, ClassBox? selectedClassBox,
+      Rect? creatingRect, Paint linePaint, Paint fillPaint)
       : _boxes = boxes,
-        _creatingBox = creatingBox,
+        _selectedClassBox = selectedClassBox,
+        _creatingRect = creatingRect,
         _linePaint = linePaint,
         _fillPaint = fillPaint;
 
-  ClassBox? get creatingBox => _creatingBox;
+  Rect? get creatingRect => _creatingRect;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -64,13 +74,14 @@ class ShapePainter extends CustomPainter {
       drawClassBox(canvas, box);
     }
 
-    if (_creatingBox != null) drawClassBox(canvas, _creatingBox!);
+    if (_selectedClassBox != null)
+      drawSelectedClassBox(canvas, _selectedClassBox!);
+    if (_creatingRect != null) drawCreatingRect(canvas, _creatingRect!);
   }
 
   @override
-  bool shouldRepaint(ShapePainter old) => _creatingBox != old.creatingBox;
+  bool shouldRepaint(ShapePainter old) => _creatingRect != old.creatingRect;
 
-  // Note: order is important
   void drawClassBox(Canvas canvas, ClassBox box) {
     final rect = box.rect;
     final path = Path()..addRect(rect);
@@ -86,6 +97,32 @@ class ShapePainter extends CustomPainter {
     canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
 
     // draw line in the middle
+    canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
+  }
+
+  void drawSelectedClassBox(Canvas canvas, ClassBox box) {
+    final rect = box.rect;
+    final path = Path()..addRect(rect);
+
+    // draw shadow and fill
+    canvas.drawShadow(path.shift(Offset(2, 2)), Colors.black, 1.0, true);
+    canvas.drawPath(path, _fillPaint);
+
+    // draw edges
+    canvas.drawLine(rect.bottomLeft, rect.bottomRight, _linePaint);
+    canvas.drawLine(rect.bottomRight, rect.topRight, _linePaint);
+    canvas.drawLine(rect.topRight, rect.topLeft, _linePaint);
+    canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
+
+    // draw line in the middle
+    canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
+  }
+
+  void drawCreatingRect(Canvas canvas, Rect rect) {
+    // draw edges
+    canvas.drawLine(rect.bottomLeft, rect.bottomRight, _linePaint);
+    canvas.drawLine(rect.bottomRight, rect.topRight, _linePaint);
+    canvas.drawLine(rect.topRight, rect.topLeft, _linePaint);
     canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
   }
 }

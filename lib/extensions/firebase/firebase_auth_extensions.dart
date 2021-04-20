@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:domain_visualiser/actions/auth/store_auth_user_data_action.dart';
 import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/extensions/actions_stream_controller_extensions.dart';
+import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
 import 'package:domain_visualiser/models/auth/apple_id_credential.dart';
 import 'package:domain_visualiser/models/auth/auth_provider_data.dart';
 import 'package:domain_visualiser/models/auth/auth_user_data.dart';
