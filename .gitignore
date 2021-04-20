@@ -49,6 +49,9 @@ app.*.map.json
 macos/Runner/GoogleService-Info.plist
 ios/Runner/GoogleService-Info.plist
 android/app/google-services.json
+web/index.html
+web/index.cdn
+web/index.auto
 
 # generated files 
 *.g.dart
