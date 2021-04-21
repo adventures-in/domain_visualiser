@@ -12,7 +12,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 class DatabaseService {
   /// A map of DatabaseSectionEnum to database location
   static const locationOf = <DatabaseSectionEnum, String>{
-    DatabaseSectionEnum.classBoxes: 'class-boxes',
+    DatabaseSectionEnum.classBoxes: 'domain-objects',
     DatabaseSectionEnum.profile: 'profile'
   };
 
@@ -33,17 +33,19 @@ class DatabaseService {
       : _firestore = database ?? FirebaseFirestore.instance,
         _eventsController = eventsController ?? StreamController<ReduxAction>();
 
-  /// Observe a collection at [section.location] and convert the resultant
-  /// [DocumentSnapshot] into a [ReduxAction] to send to the store.
+  /// Observe a collection at [locationOf] and convert the resultant
+  /// [DocumentSnapshot]/[QuerySnapshot] into a [ReduxAction] to send to the store.
   void connect(DatabaseSectionEnum section) {
     try {
       // connect the database to the store and keep the subscription
-      _subscriptions[section] =
-          _firestore.doc(locationOf[section]!).snapshots().listen((snapshot) {
+      _subscriptions[section] = _firestore
+          .collection(locationOf[section]!)
+          .snapshots()
+          .listen((QuerySnapshot snapshot) {
         try {
-          if (snapshot.exists) {
-            _eventsController.add(snapshot.toStoreAction(section));
-          }
+          final classBoxes =
+              snapshot.docs.map((doc) => doc.toClassBox()).toIList();
+          _eventsController.add(StoreClassBoxesAction(classBoxes));
         } catch (error, trace) {
           _eventsController.addProblem(error, trace);
         }
@@ -59,33 +61,6 @@ class DatabaseService {
   Future<void> saveClassBox(ClassBox box) async {
     try {
       await _firestore.doc('domain-objects/${box.id}').set(box.toJson());
-    } catch (error, trace) {
-      _eventsController.addProblem(error, trace);
-    }
-  }
-
-  /// Observe the collection at /sections/ and convert each
-  /// [CollectionSnapshot] into a [ReduxAction] then send to the store using the
-  /// passed in [StreamController].
-  void connectSections() {
-    final dbSection = DatabaseSectionEnum.classBoxes;
-
-    try {
-      // connect the database to the store and keep the subscription
-      _subscriptions[dbSection] = _firestore
-          .collection('class-boxes')
-          .snapshots()
-          .listen((collectionSnapshot) {
-        try {
-          final list = <ClassBox>[];
-          for (final querySnapshot in collectionSnapshot.docs) {
-            list.add(querySnapshot.toClassBox());
-          }
-          _eventsController.add(StoreClassBoxesAction(list.lock));
-        } catch (error, trace) {
-          _eventsController.addProblem(error, trace);
-        }
-      }, onError: _eventsController.addProblem);
     } catch (error, trace) {
       _eventsController.addProblem(error, trace);
     }

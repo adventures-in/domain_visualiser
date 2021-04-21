@@ -15,8 +15,8 @@ class PlumbStreamsMiddleware
           /// We don't manage the subscription as the streams are expected
           /// to stay open for the whole lifetime of the app
           try {
-            // databaseService.storeStream
-            //     .listen(store.dispatch, onError: store.dispatchProblem);
+            databaseService.storeStream
+                .listen(store.dispatch, onError: store.dispatchProblem);
             authService.storeStream
                 .listen(store.dispatch, onError: store.dispatchProblem);
           } catch (error, trace) {

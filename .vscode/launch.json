@@ -18,8 +18,25 @@
         "--web-hostname",
         "localhost",
         "--web-port",
-        "5000"
-    ]
-    }
+        "5000"],
+    },
+    {
+      "name": "rdt",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main_rdt.dart",
+    },
+    {
+      "name": "web&rdt",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "program": "lib/main_rdt.dart",
+      "args": [
+          "--web-hostname",
+          "localhost",
+          "--web-port",
+          "5000"],
+    },
   ]
 }

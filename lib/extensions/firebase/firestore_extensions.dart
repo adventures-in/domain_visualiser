@@ -26,7 +26,7 @@ extension ConvertDocumentSnapshot on DocumentSnapshot {
       top: data()!['top'] as double,
       right: data()!['right'] as double,
       bottom: data()!['bottom'] as double,
-      name: data()!['name'] as String);
+      name: data()?['name'] as String?);
 
   ReduxAction toStoreAction(DatabaseSectionEnum section) {
     switch (section) {
