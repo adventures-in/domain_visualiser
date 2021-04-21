@@ -1,5 +1,5 @@
 import 'package:domain_visualiser/actions/domain-objects/save_new_class_box_action.dart';
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/services/database_service.dart';
 import 'package:redux/redux.dart';
 

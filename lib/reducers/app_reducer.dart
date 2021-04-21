@@ -1,7 +1,8 @@
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/reducers/auth/sign_out.dart';
 import 'package:domain_visualiser/reducers/auth/store_auth_step.dart';
 import 'package:domain_visualiser/reducers/auth/store_auth_user_data.dart';
+import 'package:domain_visualiser/reducers/domain-objects/store_class_boxes.dart';
 import 'package:domain_visualiser/reducers/problems/add_problem.dart';
 import 'package:domain_visualiser/reducers/problems/remove_problem.dart';
 import 'package:domain_visualiser/reducers/profile/store_profile_data.dart';
@@ -18,6 +19,8 @@ final appReducer =
   StoreAuthUserDataReducer(),
   StoreAuthStepReducer(),
   SignOutReducer(),
+  // Domain Objects
+  StoreClassBoxesReducer(),
   // Problems
   AddProblemReducer(),
   RemoveProblemReducer(),

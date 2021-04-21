@@ -1,6 +1,6 @@
 import 'package:domain_visualiser/actions/auth/observe_auth_state_action.dart';
 import 'package:domain_visualiser/extensions/redux/store_extensions.dart';
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/services/auth_service.dart';
 import 'package:redux/redux.dart';
 

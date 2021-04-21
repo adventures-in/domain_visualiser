@@ -1,5 +1,5 @@
 import 'package:domain_visualiser/actions/problems/add_problem_action.dart';
-import 'package:domain_visualiser/models/app_state/app_state.dart';
+import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:redux/redux.dart';
 
 extension StoreExt on Store<AppState> {
