@@ -37,7 +37,6 @@
   <script src="/__/firebase/8.4.1/firebase-firestore.js"></script>
   <!-- Initialize Firebase -->
   <script src="/__/firebase/init.js"></script>
-  </script>
 
   <!-- This script installs service_worker.js to provide PWA functionality to
        application. For more information, see:
