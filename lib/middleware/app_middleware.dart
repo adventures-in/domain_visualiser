@@ -35,7 +35,7 @@ List<Middleware<AppState>> createAppMiddleware({
     SignInWithGoogleMiddleware(authService),
     SignOutMiddleware(authService),
     // Domain Objects
-    SaveNewClassBoxMiddleware(databaseService),
+    SaveNewClassBoxMiddleware(databaseService, authService),
     // Platform
     DetectPlatformMiddleware(platformService),
     // Shared
