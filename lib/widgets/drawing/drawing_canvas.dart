@@ -1,6 +1,4 @@
 import 'package:domain_visualiser/actions/domain-objects/save_new_class_box_action.dart';
-import 'package:domain_visualiser/actions/shared/connect_data_stream_action.dart';
-import 'package:domain_visualiser/enums/database/database_section_enum.dart';
 import 'package:domain_visualiser/extensions/drawing/rect_extensions.dart';
 import 'package:domain_visualiser/extensions/flutter/context_extensions.dart';
 import 'package:domain_visualiser/extensions/models/class_box_extensions.dart';
@@ -20,7 +18,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   Offset _start = Offset.zero;
   Rect? _creatingRect;
   ClassBox? _selectedClassBox;
-  // final List<ClassBox> _boxes = [];
 
   final _linePaint = Paint()
     ..color = Colors.blue
@@ -30,12 +27,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   final _fillPaint = Paint()..color = Colors.grey[100]!;
 
   @override
-  void initState() {
-    super.initState();
-    context.dispatch(ConnectDataStreamAction(DatabaseSectionEnum.classBoxes));
-  }
-
-  @override
   Widget build(BuildContext context) {
     return CustomPaint(
       foregroundPainter: ShapePainter(widget.boxes, _selectedClassBox,
@@ -43,7 +34,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       child: Container(
         color: Colors.white,
         child: GestureDetector(
-            onTapUp: (details) => print('Tap: $details'),
+            onTapUp: (details) => print('Tap: ${details.globalPosition}'),
             onPanStart: (details) {
               setState(() => _start = details.globalPosition);
             },
@@ -79,6 +70,7 @@ class ShapePainter extends CustomPainter {
         _fillPaint = fillPaint;
 
   Rect? get creatingRect => _creatingRect;
+  List<ClassBox> get boxes => _boxes;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -94,7 +86,8 @@ class ShapePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(ShapePainter old) => _creatingRect != old.creatingRect;
+  bool shouldRepaint(ShapePainter old) =>
+      _creatingRect != old.creatingRect || _boxes.length != old.boxes.length;
 
   void drawClassBox(Canvas canvas, ClassBox box) {
     final rect = box.rect;
