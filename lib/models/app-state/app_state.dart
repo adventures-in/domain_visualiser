@@ -1,6 +1,6 @@
 import 'package:domain_visualiser/enums/auth/auth_step_enum.dart';
 import 'package:domain_visualiser/models/auth/auth_user_data.dart';
-import 'package:domain_visualiser/models/domain-objects/class_box.dart';
+import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:domain_visualiser/models/navigation/page_data/page_data.dart';
 import 'package:domain_visualiser/models/problems/problem.dart';
 import 'package:domain_visualiser/models/profile/profile_data.dart';

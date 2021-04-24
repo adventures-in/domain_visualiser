@@ -6,7 +6,7 @@ import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/enums/database/database_section_enum.dart';
 import 'package:domain_visualiser/extensions/firebase/firestore_extensions.dart';
 import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
-import 'package:domain_visualiser/models/domain-objects/class_box.dart';
+import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 
 class DatabaseService {
@@ -58,9 +58,19 @@ class DatabaseService {
   void disconnect(DatabaseSectionEnum section) =>
       _subscriptions[section]?.cancel();
 
-  Future<void> saveClassBox(ClassBox box) async {
+  Future<void> addClassBox(ClassBox box) async {
     try {
       await _firestore.doc('domain-objects/${box.id}').set(box.toJson());
+    } catch (error, trace) {
+      _eventsController.addProblem(error, trace);
+    }
+  }
+
+  Future<void> updateDomain(DomainObject object) async {
+    try {
+      await _firestore
+          .doc('${_getPath(object)}/${object.id}')
+          .update(object.toJson());
     } catch (error, trace) {
       _eventsController.addProblem(error, trace);
     }
@@ -73,4 +83,22 @@ class DatabaseService {
   /// functions that disregard (stop observing) that part of the database just
   /// cancel the subscription.
   Stream<ReduxAction> get storeStream => _eventsController.stream;
+
+  String _getPath(DomainObject object) {
+    return object.when<String>(
+        classBox: (String? type,
+                String id,
+                int? flightTime,
+                String? userId,
+                double left,
+                double top,
+                double right,
+                double bottom,
+                String? name,
+                IList<String>? staticMethods,
+                IList<String>? instanceMethods,
+                IList<String>? staticVariables,
+                IList<String>? instanceVariables) =>
+            'domain-objects');
+  }
 }
