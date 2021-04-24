@@ -1,8 +1,9 @@
-import 'package:domain_visualiser/actions/domain-objects/save_new_class_box_action.dart';
+import 'package:domain_visualiser/actions/domain-objects/add_class_box_action.dart';
+import 'package:domain_visualiser/actions/domain-objects/update_domain_action.dart';
 import 'package:domain_visualiser/extensions/drawing/rect_extensions.dart';
+import 'package:domain_visualiser/extensions/extensions.dart';
 import 'package:domain_visualiser/extensions/flutter/context_extensions.dart';
-import 'package:domain_visualiser/extensions/models/class_box_extensions.dart';
-import 'package:domain_visualiser/models/domain-objects/class_box.dart';
+import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:flutter/material.dart';
 
 class DrawingCanvas extends StatefulWidget {
@@ -18,6 +19,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   Offset _start = Offset.zero;
   Rect? _creatingRect;
   ClassBox? _selectedClassBox;
+  final Map<String, int> _departureTimeOf = {};
 
   final _linePaint = Paint()
     ..color = Colors.blue
@@ -27,6 +29,21 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   final _fillPaint = Paint()..color = Colors.grey[100]!;
 
   @override
+  void didUpdateWidget(covariant DrawingCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    for (var box in widget.boxes) {
+      final departureTime = _departureTimeOf[box.id];
+      if (departureTime != null) {
+        _departureTimeOf.remove(box.id);
+
+        context.dispatch(UpdateDomainAction(box.copyWith(
+            flightTime:
+                DateTime.now().millisecondsSinceEpoch - departureTime)));
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return CustomPaint(
       foregroundPainter: ShapePainter(widget.boxes, _selectedClassBox,
@@ -34,18 +51,20 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       child: Container(
         color: Colors.white,
         child: GestureDetector(
-            onTapUp: (details) => print('Tap: ${details.globalPosition}'),
+            onTapUp: (details) => print('Tap: ${details.localPosition}'),
             onPanStart: (details) {
-              setState(() => _start = details.globalPosition);
+              setState(() => _start = details.localPosition);
             },
             onPanUpdate: (details) {
               setState(() => _creatingRect =
-                  Rect.fromPoints(_start, details.globalPosition));
+                  Rect.fromPoints(_start, details.localPosition));
             },
             onPanEnd: (details) {
               // dispatch action to save class box
               final newClassBox = _creatingRect!.toClassBox();
-              context.dispatch(SaveNewClassBoxAction(newClassBox));
+              _departureTimeOf[newClassBox.id] =
+                  DateTime.now().millisecondsSinceEpoch;
+              context.dispatch(AddClassBoxAction(newClassBox));
               _selectedClassBox = newClassBox;
               _creatingRect = null;
             }),

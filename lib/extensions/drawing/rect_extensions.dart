@@ -1,4 +1,4 @@
-import 'package:domain_visualiser/models/domain-objects/class_box.dart';
+import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:flutter/painting.dart';
 import 'package:uuid/uuid.dart';
 

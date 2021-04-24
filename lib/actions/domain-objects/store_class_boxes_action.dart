@@ -1,5 +1,5 @@
 import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/models/domain-objects/class_box.dart';
+import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 

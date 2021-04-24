@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:domain_visualiser/actions/profile/store_profile_action.dart';
 import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/enums/database/database_section_enum.dart';
-import 'package:domain_visualiser/models/domain-objects/class_box.dart';
+import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:domain_visualiser/models/profile/profile_data.dart';
 
 extension ConvertDocumentSnapshot on DocumentSnapshot {

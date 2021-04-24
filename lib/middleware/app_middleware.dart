@@ -3,7 +3,8 @@ import 'package:domain_visualiser/middleware/auth/observe_auth_state.dart';
 import 'package:domain_visualiser/middleware/auth/sign_in_with_apple.dart';
 import 'package:domain_visualiser/middleware/auth/sign_in_with_google.dart';
 import 'package:domain_visualiser/middleware/auth/sign_out.dart';
-import 'package:domain_visualiser/middleware/domain-objects/save_new_class_box_middleware.dart';
+import 'package:domain_visualiser/middleware/domain-objects/add_class_box_middleware.dart';
+import 'package:domain_visualiser/middleware/domain-objects/update_domain_middleware.dart';
 import 'package:domain_visualiser/middleware/platform/detect_platform.dart';
 import 'package:domain_visualiser/middleware/shared/connect_data_stream_middleware.dart';
 import 'package:domain_visualiser/middleware/shared/disconnect_data_stream_middleware.dart';
@@ -35,7 +36,8 @@ List<Middleware<AppState>> createAppMiddleware({
     SignInWithGoogleMiddleware(authService),
     SignOutMiddleware(authService),
     // Domain Objects
-    SaveNewClassBoxMiddleware(databaseService, authService),
+    AddClassBoxMiddleware(databaseService, authService),
+    UpdateDomainMiddleware(databaseService),
     // Platform
     DetectPlatformMiddleware(platformService),
     // Shared
