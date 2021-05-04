@@ -3,6 +3,7 @@ import 'package:domain_visualiser/middleware/auth/observe_auth_state.dart';
 import 'package:domain_visualiser/middleware/auth/sign_in_with_apple.dart';
 import 'package:domain_visualiser/middleware/auth/sign_in_with_google.dart';
 import 'package:domain_visualiser/middleware/auth/sign_out.dart';
+import 'package:domain_visualiser/middleware/auth/store_auth_user_data.dart';
 import 'package:domain_visualiser/middleware/domain-objects/add_class_box_middleware.dart';
 import 'package:domain_visualiser/middleware/domain-objects/update_domain_middleware.dart';
 import 'package:domain_visualiser/middleware/platform/detect_platform.dart';
@@ -35,6 +36,7 @@ List<Middleware<AppState>> createAppMiddleware({
     SignInWithAppleMiddleware(authService),
     SignInWithGoogleMiddleware(authService),
     SignOutMiddleware(authService),
+    StoreAuthUserDataMiddleware(databaseService),
     // Domain Objects
     AddClassBoxMiddleware(databaseService, authService),
     UpdateDomainMiddleware(databaseService),

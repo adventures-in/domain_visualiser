@@ -16,8 +16,7 @@ extension ConvertDocumentSnapshot on DocumentSnapshot {
         displayName: data()?['displayName'] as String,
         photoURL: data()?['photoURL'] as String? ??
             'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
-        firstName: data()?['firstName'] as String? ?? '_',
-        lastName: data()?['lastName'] as String? ?? '_');
+        color: data()?['color'] as int? ?? 0xFFFFFFFF);
   }
 
   ClassBox toClassBox() => ClassBox(

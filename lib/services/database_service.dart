@@ -1,19 +1,23 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:domain_visualiser/actions/domain-objects/store_class_boxes_action.dart';
 import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/enums/database/database_section_enum.dart';
+import 'package:domain_visualiser/extensions/extensions.dart';
 import 'package:domain_visualiser/extensions/firebase/firestore_extensions.dart';
 import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
+import 'package:domain_visualiser/models/auth/auth_user_data.dart';
 import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
+import 'package:domain_visualiser/models/profile/profile_data.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 
 class DatabaseService {
   /// A map of DatabaseSectionEnum to database location
   static const locationOf = <DatabaseSectionEnum, String>{
     DatabaseSectionEnum.classBoxes: 'domain-objects',
-    DatabaseSectionEnum.profile: 'profile'
+    // DatabaseSectionEnum.profile: 'profile'
   };
 
   /// The [FirebaseFirestore] instance
@@ -57,6 +61,25 @@ class DatabaseService {
 
   void disconnect(DatabaseSectionEnum section) =>
       _subscriptions[section]?.cancel();
+
+  Future<ProfileData> retrieveProfile(AuthUserData authData) async {
+    final docRef = _firestore.doc('profiles/${authData.uid}');
+    final snapshot = await docRef.get();
+
+    if (snapshot.exists) return snapshot.toProfileData();
+
+    // Create a profile entry as none exists
+    final profile = ProfileData(
+        id: authData.uid,
+        displayName: authData.displayName ?? 'null',
+        photoURL: authData.photoURL ??
+            'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
+        color: (Random().nextDouble() * 0xFFFFFF).toInt());
+
+    await docRef.set(profile.toJson());
+
+    return profile;
+  }
 
   Future<void> addClassBox(ClassBox box) async {
     try {

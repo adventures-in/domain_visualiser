@@ -7,10 +7,9 @@ part 'profile_data.g.dart';
 class ProfileData with _$ProfileData {
   factory ProfileData({
     required String id,
-    String? displayName,
-    String? photoURL,
-    String? firstName,
-    String? lastName,
+    required String displayName,
+    required String photoURL,
+    required int color,
   }) = _ProfileData;
 
   factory ProfileData.fromJson(Map<String, dynamic> json) =>

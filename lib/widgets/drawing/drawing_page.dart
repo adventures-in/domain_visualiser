@@ -16,12 +16,7 @@ class DrawingPage extends StatelessWidget {
         Container(
           height: 50,
           child: Row(
-            children: [
-              TextButton(
-                onPressed: () {},
-                child: Text('clear'),
-              )
-            ],
+            children: [TextButton(onPressed: () {}, child: Text('clear'))],
           ),
         ),
         Expanded(
