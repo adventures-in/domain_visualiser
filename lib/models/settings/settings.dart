@@ -9,8 +9,7 @@ part 'settings.freezed.dart';
 part 'settings.g.dart';
 
 @freezed
-class Settings with _$Settings {
-  @JsonSerializable(explicitToJson: true)
+abstract class Settings with _$Settings {
   factory Settings({
     required ThemeSet darkTheme,
     required ThemeSet lightTheme,

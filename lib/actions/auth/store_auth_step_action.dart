@@ -6,7 +6,9 @@ part 'store_auth_step_action.freezed.dart';
 part 'store_auth_step_action.g.dart';
 
 @freezed
-class StoreAuthStepAction with _$StoreAuthStepAction, ReduxAction {
+abstract class StoreAuthStepAction with _$StoreAuthStepAction, ReduxAction {
+  const StoreAuthStepAction._();
+
   factory StoreAuthStepAction({required AuthStepEnum step}) =
       _StoreAuthStepAction;
 

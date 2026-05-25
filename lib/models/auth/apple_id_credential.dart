@@ -4,7 +4,7 @@ part 'apple_id_credential.freezed.dart';
 part 'apple_id_credential.g.dart';
 
 @freezed
-class AppleIdCredential with _$AppleIdCredential {
+abstract class AppleIdCredential with _$AppleIdCredential {
   factory AppleIdCredential({
     /// An identifier associated with the authenticated user.
     ///

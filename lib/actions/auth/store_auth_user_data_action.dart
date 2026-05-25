@@ -6,8 +6,9 @@ part 'store_auth_user_data_action.freezed.dart';
 part 'store_auth_user_data_action.g.dart';
 
 @freezed
-class StoreAuthUserDataAction with _$StoreAuthUserDataAction, ReduxAction {
-  @JsonSerializable(explicitToJson: true)
+abstract class StoreAuthUserDataAction with _$StoreAuthUserDataAction, ReduxAction {
+  const StoreAuthUserDataAction._();
+
   factory StoreAuthUserDataAction({AuthUserData? authUserData}) =
       _StoreAuthUserDataAction;
 

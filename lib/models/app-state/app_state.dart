@@ -7,26 +7,26 @@ import 'package:domain_visualiser/models/profile/profile_data.dart';
 import 'package:domain_visualiser/models/settings/settings.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:domain_visualiser/converters/ilist_converters.dart';
 
 part 'app_state.freezed.dart';
 part 'app_state.g.dart';
 
 @freezed
-class AppState with _$AppState {
-  @JsonSerializable(explicitToJson: true)
+abstract class AppState with _$AppState {
   factory AppState({
     /// Auth
     required AuthStepEnum authStep,
     AuthUserData? authUserData,
 
     /// Domain Objects
-    required IList<ClassBox> classBoxes,
+    @ClassBoxIListConverter() required IList<ClassBox> classBoxes,
 
     /// Navigation
-    required IList<PageData> pagesData,
+    @PageDataIListConverter() required IList<PageData> pagesData,
 
     /// Problems
-    required IList<Problem> problems,
+    @ProblemIListConverter() required IList<Problem> problems,
 
     /// Profile
     ProfileData? profileData,

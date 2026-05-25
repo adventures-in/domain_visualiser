@@ -6,8 +6,7 @@ part 'theme_set.freezed.dart';
 part 'theme_set.g.dart';
 
 @freezed
-class ThemeSet with _$ThemeSet {
-  @JsonSerializable(explicitToJson: true)
+abstract class ThemeSet with _$ThemeSet {
   factory ThemeSet({
     required ThemeColors colors,
     required ThemeBrightnessEnum brightness,

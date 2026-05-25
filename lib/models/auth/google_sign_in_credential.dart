@@ -4,7 +4,7 @@ part 'google_sign_in_credential.freezed.dart';
 part 'google_sign_in_credential.g.dart';
 
 @freezed
-class GoogleSignInCredential with _$GoogleSignInCredential {
+abstract class GoogleSignInCredential with _$GoogleSignInCredential {
   factory GoogleSignInCredential({
     /// An OpenID Connect ID token that identifies the user.
     String? idToken,

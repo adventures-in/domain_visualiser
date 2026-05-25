@@ -5,7 +5,9 @@ part 'plumb_streams_action.freezed.dart';
 part 'plumb_streams_action.g.dart';
 
 @freezed
-class PlumbStreamsAction with _$PlumbStreamsAction, ReduxAction {
+abstract class PlumbStreamsAction with _$PlumbStreamsAction, ReduxAction {
+  const PlumbStreamsAction._();
+
   factory PlumbStreamsAction() = _PlumbStreamsAction;
 
   factory PlumbStreamsAction.fromJson(Map<String, dynamic> json) =>

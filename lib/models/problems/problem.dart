@@ -4,7 +4,7 @@ part 'problem.freezed.dart';
 part 'problem.g.dart';
 
 @freezed
-class Problem with _$Problem {
+abstract class Problem with _$Problem {
   factory Problem({
     required String errorString,
     String? traceString,
