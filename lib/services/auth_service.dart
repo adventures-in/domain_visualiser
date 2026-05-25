@@ -50,15 +50,42 @@ class AuthService {
     _firebaseAuthStateSubscription?.cancel();
   }
 
-  /// `null` in case where sign in process was aborted
+  /// google_sign_in 7.x replaced the constructor with a singleton that must be
+  /// initialized once before use. Guarded so repeated sign-in attempts don't
+  /// re-initialize.
+  bool _googleSignInInitialized = false;
+
+  Future<void> _ensureGoogleSignInInitialized() async {
+    if (_googleSignInInitialized) return;
+    await GoogleSignIn.instance.initialize();
+    _googleSignInInitialized = true;
+  }
+
+  /// `null` in case where sign in process was aborted.
+  ///
+  /// google_sign_in 7.x: `signIn()` -> `authenticate()` (throws on cancel
+  /// rather than returning null), and the authentication result now carries
+  /// only an `idToken`. The OAuth access token, when needed, comes from the
+  /// separate authorization client. Firebase sign-in only requires the
+  /// idToken, so the access token is best-effort.
   Future<GoogleSignInCredential?> getGoogleCredential() async {
-    final _googleSignIn = GoogleSignIn(scopes: ['email']);
+    await _ensureGoogleSignInInitialized();
 
-    final googleSignInAccount = await _googleSignIn.signIn();
-    final googleSignInAuthentication =
-        await googleSignInAccount?.authentication;
+    try {
+      final account =
+          await GoogleSignIn.instance.authenticate(scopeHint: ['email']);
+      final authorization =
+          await account.authorizationClient.authorizationForScopes(['email']);
 
-    return googleSignInAuthentication?.toModel();
+      return GoogleSignInCredential(
+        idToken: account.authentication.idToken,
+        accessToken: authorization?.accessToken,
+      );
+    } on GoogleSignInException catch (e) {
+      // user aborted the flow
+      if (e.code == GoogleSignInExceptionCode.canceled) return null;
+      rethrow;
+    }
   }
 
   Future<AuthUserData> signInWithGoogle(
@@ -104,8 +131,8 @@ class AuthService {
   /// The stream of auth state is connected to the store so the app state will
   /// be automatically updated
   Future<void> signOut() async {
-    final _googleSignIn = GoogleSignIn(scopes: ['email']);
-    await _googleSignIn.signOut();
+    await _ensureGoogleSignInInitialized();
+    await GoogleSignIn.instance.signOut();
     await _firebaseAuth.signOut();
   }
 }

@@ -6,10 +6,8 @@ import 'package:domain_visualiser/extensions/redux/actions_stream_controller_ext
 import 'package:domain_visualiser/models/auth/apple_id_credential.dart';
 import 'package:domain_visualiser/models/auth/auth_provider_data.dart';
 import 'package:domain_visualiser/models/auth/auth_user_data.dart';
-import 'package:domain_visualiser/models/auth/google_sign_in_credential.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 extension ConnectAndConvert on FirebaseAuth {
@@ -28,13 +26,6 @@ extension ConnectAndConvert on FirebaseAuth {
       }
     }, onError: controller.addProblem);
   }
-}
-
-extension GoogleSignInAuthenticationExt on GoogleSignInAuthentication {
-  GoogleSignInCredential toModel() => GoogleSignInCredential(
-      idToken: idToken,
-      accessToken: accessToken,
-      serverAuthCode: serverAuthCode);
 }
 
 extension AuthorizationCredentialAppleIDExt on AuthorizationCredentialAppleID {
@@ -67,7 +58,7 @@ extension FirebaseUserExt on User {
 extension UserInfoExt on UserInfo {
   AuthProviderData toModel() => AuthProviderData(
         providerId: providerId,
-        uid: uid,
+        uid: uid ?? '',
         displayName: displayName,
         photoURL: photoURL,
         email: email,
