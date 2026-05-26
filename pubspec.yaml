@@ -19,7 +19,6 @@ dependencies:
   sign_in_with_apple: any
   
   # databases
-  firebase_database: any
   cloud_firestore: any
 
   # firebase 
