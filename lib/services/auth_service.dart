@@ -7,6 +7,7 @@ import 'package:domain_visualiser/models/auth/apple_id_credential.dart';
 import 'package:domain_visualiser/models/auth/auth_user_data.dart';
 import 'package:domain_visualiser/models/auth/google_sign_in_credential.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
@@ -88,18 +89,40 @@ class AuthService {
     }
   }
 
-  Future<AuthUserData> signInWithGoogle(
-      {required GoogleSignInCredential credential}) async {
-    final AuthCredential authCredential = GoogleAuthProvider.credential(
-      accessToken: credential.accessToken,
-      idToken: credential.idToken,
-    );
+  /// Signs in with Google and returns the user, or `null` if the user aborted.
+  ///
+  /// Platform split: google_sign_in 7.x has no programmatic `authenticate()`
+  /// on web, so there we use Firebase's own popup flow
+  /// (`signInWithPopup(GoogleAuthProvider)`), which handles the OAuth dance and
+  /// Firebase sign-in in one step. On native we exchange a google_sign_in
+  /// credential via `signInWithCredential`.
+  Future<AuthUserData?> signInWithGoogle() async {
+    try {
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider()..addScope('email');
+        final userCredential = await _firebaseAuth.signInWithPopup(provider);
+        return userCredential.user?.toModel();
+      }
 
-    final userCredential =
-        await FirebaseAuth.instance.signInWithCredential(authCredential);
-    // not sure why user would be null (docs don't say) so we throw if it is
-    final user = userCredential.user!;
-    return user.toModel();
+      final credential = await getGoogleCredential();
+      if (credential == null) return null; // user aborted
+
+      final authCredential = GoogleAuthProvider.credential(
+        accessToken: credential.accessToken,
+        idToken: credential.idToken,
+      );
+      final userCredential =
+          await _firebaseAuth.signInWithCredential(authCredential);
+      return userCredential.user?.toModel();
+    } on FirebaseAuthException catch (e) {
+      // user dismissed the web popup — treat as a cancel, not an error
+      if (e.code == 'popup-closed-by-user' ||
+          e.code == 'cancelled-popup-request' ||
+          e.code == 'web-context-canceled') {
+        return null;
+      }
+      rethrow;
+    }
   }
 
   Future<AppleIdCredential> getAppleCredential() async {

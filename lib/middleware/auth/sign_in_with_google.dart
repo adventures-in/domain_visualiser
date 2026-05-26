@@ -17,24 +17,19 @@ class SignInWithGoogleMiddleware
             store.dispatch(
                 StoreAuthStepAction(step: AuthStepEnum.contactingGoogle));
 
-            final credential = await authService.getGoogleCredential();
+            // signInWithGoogle runs the full flow (web popup or native
+            // credential exchange) and returns null if the user aborted.
+            final authUserData = await authService.signInWithGoogle();
 
             // If user cancelled sign in, reset UI and return
-            if (credential == null) {
+            if (authUserData == null) {
               store.dispatch(
                   StoreAuthStepAction(step: AuthStepEnum.waitingForInput));
               return;
             }
 
-            store.dispatch(
-                StoreAuthStepAction(step: AuthStepEnum.signingInWithFirebase));
-
-            // The authStateChanges stream will emit the same AuthUserData and
-            // we are already listening to that stream and updating the app state
-            // with whatever gets emitted.
-            final authUserData =
-                await authService.signInWithGoogle(credential: credential);
-
+            // The authStateChanges stream also emits this AuthUserData and we
+            // are already listening to that stream to update app state.
             store.dispatch(StoreAuthUserDataAction(authUserData: authUserData));
             store.dispatch(
                 StoreAuthStepAction(step: AuthStepEnum.waitingForInput));
