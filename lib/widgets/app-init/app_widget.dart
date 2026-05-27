@@ -52,7 +52,7 @@ class _AppWidgetState extends State<AppWidget> {
       });
 
       /// This should happen once on app load, the various streams from the
-      /// [FirebaseFirestore] database are changed but the [DatabaseService]'s
+      /// [FirebaseFirestore] database are changed but the [GraphSyncBackend]'s
       /// [StreamController] stays connected to the redux [Store].
       _store.dispatch(PlumbStreamsAction());
 

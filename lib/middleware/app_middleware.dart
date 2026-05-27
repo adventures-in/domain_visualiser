@@ -10,8 +10,8 @@ import 'package:domain_visualiser/middleware/shared/connect_data_stream_middlewa
 import 'package:domain_visualiser/middleware/shared/disconnect_data_stream_middleware.dart';
 import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/services/auth_service.dart';
-import 'package:domain_visualiser/services/database_service.dart';
 import 'package:domain_visualiser/services/platform_service.dart';
+import 'package:domain_visualiser/sync/graph_sync_backend.dart';
 import 'package:redux/redux.dart';
 
 /// Middleware is used for a variety of things:
@@ -25,23 +25,23 @@ import 'package:redux/redux.dart';
 ///
 List<Middleware<AppState>> createAppMiddleware({
   required AuthService authService,
-  required DatabaseService databaseService,
+  required GraphSyncBackend backend,
   required PlatformService platformService,
 }) {
   return [
     // Auth
     ObserveAuthStateMiddleware(authService),
-    PlumbStreamsMiddleware(authService, databaseService),
+    PlumbStreamsMiddleware(authService, backend),
     SignInWithAppleMiddleware(authService),
     SignInWithGoogleMiddleware(authService),
     SignOutMiddleware(authService),
     // Domain Objects
-    AddClassBoxMiddleware(databaseService, authService),
-    UpdateDomainMiddleware(databaseService),
+    AddClassBoxMiddleware(backend, authService),
+    UpdateDomainMiddleware(backend),
     // Platform
     DetectPlatformMiddleware(platformService),
     // Shared
-    ConnectDataStreamMiddleware(databaseService),
-    DisconnectDataStreamMiddleware(databaseService),
+    ConnectDataStreamMiddleware(backend),
+    DisconnectDataStreamMiddleware(backend),
   ];
 }
