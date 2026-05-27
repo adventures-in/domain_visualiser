@@ -47,10 +47,6 @@ void main() {
     });
 
     test('concurrent drag + drag: box never tears (geometry is one unit)', () {
-      final base = _box(
-        payload: {'left': 0.0, 'top': 0.0, 'right': 10.0, 'bottom': 10.0},
-        stamps: {'geometry': _stamp('seed', 0)},
-      );
       final alice = _box(
         payload: {'left': 1.0, 'top': 1.0, 'right': 2.0, 'bottom': 2.0},
         stamps: {'geometry': _stamp('alice', 1)},
