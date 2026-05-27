@@ -65,9 +65,9 @@ class FirestoreBackend implements GraphSyncBackend {
       _subscriptions[section]?.cancel();
 
   @override
-  Future<void> addNode(ClassBox node) async {
+  Future<void> addNode(DomainObject node) async {
     try {
-      await _firestore.doc('domain-objects/${node.id}').set(node.toJson());
+      await _firestore.doc('${_getPath(node)}/${node.id}').set(node.toJson());
     } catch (error, trace) {
       _eventsController.addProblem(error, trace);
     }
