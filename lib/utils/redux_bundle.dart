@@ -5,8 +5,9 @@ import 'package:domain_visualiser/middleware/app_middleware.dart';
 import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/reducers/app_reducer.dart';
 import 'package:domain_visualiser/services/auth_service.dart';
-import 'package:domain_visualiser/services/database_service.dart';
 import 'package:domain_visualiser/services/platform_service.dart';
+import 'package:domain_visualiser/sync/firestore_backend.dart';
+import 'package:domain_visualiser/sync/graph_sync_backend.dart';
 import 'package:domain_visualiser/utils/store_operation.dart';
 import 'package:redux/redux.dart';
 
@@ -30,16 +31,16 @@ class ReduxBundle {
 
   /// Services
   final AuthService _authService;
-  final DatabaseService _databaseService;
+  final GraphSyncBackend _backend;
   final PlatformService _platformService;
 
   ReduxBundle(
       {List<Middleware>? extraMiddlewares,
       AuthService? authService,
-      DatabaseService? databaseService,
+      GraphSyncBackend? backend,
       PlatformService? platformService})
       : _authService = authService ?? AuthService(),
-        _databaseService = databaseService ?? DatabaseService(),
+        _backend = backend ?? FirestoreBackend(),
         _platformService = platformService ?? PlatformService();
 
   Future<Store<AppState>> createStore() async {
@@ -49,7 +50,7 @@ class ReduxBundle {
       middleware: [
         ...createAppMiddleware(
             authService: _authService,
-            databaseService: _databaseService,
+            backend: _backend,
             platformService: _platformService),
         ..._extraMiddlewares
       ],
