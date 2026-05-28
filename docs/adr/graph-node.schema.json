@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://enspyr.co/schemas/graph-node.schema.json",
+  "title": "GraphNode",
+  "description": "Schema-agnostic envelope for a collaborative knowledge-graph node, with per-merge-unit CRDT metadata. Generic in transit, typed at the app edge. See ADR-0001.",
+  "type": "object",
+  "required": ["id", "type", "payload", "stamps"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable identity. Immutable; never stamped, never merged."
+    },
+    "type": {
+      "type": "string",
+      "description": "Discriminator selecting the receiving app's deserializer / NodeSchema (e.g. 'ClassBox'). Immutable."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Domain field values keyed by field name. The engine never interprets these; only the app that registered `type` does. The reserved key '__deleted__' (boolean) is the tombstone flag.",
+      "additionalProperties": true
+    },
+    "stamps": {
+      "type": "object",
+      "description": "One CRDT stamp per merge unit declared by the node's NodeSchema. The reserved unit '__tomb__' stamps the '__deleted__' payload flag so deletion LWWs against edits uniformly.",
+      "additionalProperties": { "$ref": "#/$defs/fieldStamp" }
+    }
+  },
+  "$defs": {
+    "fieldStamp": {
+      "type": "object",
+      "required": ["hlc", "origin"],
+      "additionalProperties": false,
+      "properties": {
+        "hlc": {
+          "type": "string",
+          "description": "Hybrid Logical Clock in canonical lexicographically-sortable form (package:crdt encoding). String comparison yields causal order."
+        },
+        "origin": {
+          "type": "string",
+          "description": "Client id that produced this write. Used for echo-suppression. Redundant with the nodeId embedded in `hlc` when package:crdt is the producer; stored explicitly so non-crdt producers remain valid and echo-suppression needs no HLC parser. See ADR-0001 decision 1."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "id": "box-7f3a",
+      "type": "ClassBox",
+      "payload": {
+        "name": "Order",
+        "left": 120.0, "top": 80.0, "right": 320.0, "bottom": 200.0,
+        "instanceMethods": ["total()", "addLine(item)"],
+        "__deleted__": false
+      },
+      "stamps": {
+        "geometry": { "hlc": "2026-05-27T08:55:00.000Z-0001-clientA", "origin": "clientA" },
+        "label":    { "hlc": "2026-05-27T08:54:10.000Z-0000-clientB", "origin": "clientB" },
+        "instanceMethods": { "hlc": "2026-05-27T08:54:10.000Z-0001-clientB", "origin": "clientB" },
+        "__tomb__": { "hlc": "2026-05-27T08:50:00.000Z-0000-clientA", "origin": "clientA" }
+      }
+    }
+  ]
+}
