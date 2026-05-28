@@ -4,7 +4,7 @@ part 'theme_colors.freezed.dart';
 part 'theme_colors.g.dart';
 
 @freezed
-class ThemeColors with _$ThemeColors {
+abstract class ThemeColors with _$ThemeColors {
   factory ThemeColors({
     required int primary,
     required int secondary,

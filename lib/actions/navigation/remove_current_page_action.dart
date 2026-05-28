@@ -5,7 +5,9 @@ part 'remove_current_page_action.freezed.dart';
 part 'remove_current_page_action.g.dart';
 
 @freezed
-class RemoveCurrentPageAction with _$RemoveCurrentPageAction, ReduxAction {
+abstract class RemoveCurrentPageAction with _$RemoveCurrentPageAction, ReduxAction {
+  const RemoveCurrentPageAction._();
+
   factory RemoveCurrentPageAction() = _RemoveCurrentPageAction;
 
   factory RemoveCurrentPageAction.fromJson(Map<String, dynamic> json) =>

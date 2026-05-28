@@ -6,7 +6,9 @@ part 'update_domain_action.freezed.dart';
 part 'update_domain_action.g.dart';
 
 @freezed
-class UpdateDomainAction with _$UpdateDomainAction, ReduxAction {
+abstract class UpdateDomainAction with _$UpdateDomainAction, ReduxAction {
+  const UpdateDomainAction._();
+
   factory UpdateDomainAction(DomainObject object) = _UpdateDomainAction;
 
   factory UpdateDomainAction.fromJson(Map<String, dynamic> json) =>

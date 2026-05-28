@@ -4,7 +4,7 @@ part 'auth_provider_data.freezed.dart';
 part 'auth_provider_data.g.dart';
 
 @freezed
-class AuthProviderData with _$AuthProviderData {
+abstract class AuthProviderData with _$AuthProviderData {
   factory AuthProviderData({
     /// The provider identifier.
     required String providerId,

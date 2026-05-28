@@ -6,7 +6,7 @@ part 'add_problem_action.freezed.dart';
 part 'add_problem_action.g.dart';
 
 @freezed
-class AddProblemAction with _$AddProblemAction, ReduxAction {
+abstract class AddProblemAction with _$AddProblemAction, ReduxAction {
   const AddProblemAction._();
   factory AddProblemAction({
     required String errorString,

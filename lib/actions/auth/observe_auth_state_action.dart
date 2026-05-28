@@ -5,7 +5,9 @@ part 'observe_auth_state_action.freezed.dart';
 part 'observe_auth_state_action.g.dart';
 
 @freezed
-class ObserveAuthStateAction with _$ObserveAuthStateAction, ReduxAction {
+abstract class ObserveAuthStateAction with _$ObserveAuthStateAction, ReduxAction {
+  const ObserveAuthStateAction._();
+
   factory ObserveAuthStateAction() = _ObserveAuthStateAction;
 
   factory ObserveAuthStateAction.fromJson(Map<String, dynamic> json) =>

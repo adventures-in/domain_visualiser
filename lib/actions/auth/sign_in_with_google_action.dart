@@ -5,7 +5,9 @@ part 'sign_in_with_google_action.freezed.dart';
 part 'sign_in_with_google_action.g.dart';
 
 @freezed
-class SignInWithGoogleAction with _$SignInWithGoogleAction, ReduxAction {
+abstract class SignInWithGoogleAction with _$SignInWithGoogleAction, ReduxAction {
+  const SignInWithGoogleAction._();
+
   factory SignInWithGoogleAction() = _SignInWithGoogleAction;
 
   factory SignInWithGoogleAction.fromJson(Map<String, dynamic> json) =>

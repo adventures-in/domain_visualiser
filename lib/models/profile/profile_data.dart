@@ -4,7 +4,7 @@ part 'profile_data.freezed.dart';
 part 'profile_data.g.dart';
 
 @freezed
-class ProfileData with _$ProfileData {
+abstract class ProfileData with _$ProfileData {
   factory ProfileData({
     required String id,
     String? displayName,

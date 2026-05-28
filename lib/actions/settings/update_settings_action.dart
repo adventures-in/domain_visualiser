@@ -6,7 +6,9 @@ part 'update_settings_action.freezed.dart';
 part 'update_settings_action.g.dart';
 
 @freezed
-class UpdateSettingsAction with _$UpdateSettingsAction, ReduxAction {
+abstract class UpdateSettingsAction with _$UpdateSettingsAction, ReduxAction {
+  const UpdateSettingsAction._();
+
   factory UpdateSettingsAction({required PlatformEnum platform}) =
       _UpdateSettingsAction;
 

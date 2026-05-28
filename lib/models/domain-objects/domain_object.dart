@@ -1,11 +1,12 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:domain_visualiser/converters/ilist_converters.dart';
 
 part 'domain_object.freezed.dart';
 part 'domain_object.g.dart';
 
 @Freezed(unionKey: 'type', unionValueCase: FreezedUnionCase.pascal)
-class DomainObject with _$DomainObject {
+abstract class DomainObject with _$DomainObject {
   @FreezedUnionValue('SpecialCase')
   const factory DomainObject.classBox({
     /// Used for deserializing a [DomainObject] as the correct type.
@@ -29,10 +30,10 @@ class DomainObject with _$DomainObject {
 
     /// Metadata for the ClassBox
     String? name,
-    IList<String>? staticMethods,
-    IList<String>? instanceMethods,
-    IList<String>? staticVariables,
-    IList<String>? instanceVariables,
+    @StringIListConverter() IList<String>? staticMethods,
+    @StringIListConverter() IList<String>? instanceMethods,
+    @StringIListConverter() IList<String>? staticVariables,
+    @StringIListConverter() IList<String>? instanceVariables,
   }) = ClassBox;
   // const factory DomainObject.error(String message) = DomainObjectError;
 

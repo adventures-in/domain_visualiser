@@ -1,1 +1,1 @@
-class ReduxAction {}
+mixin class ReduxAction {}

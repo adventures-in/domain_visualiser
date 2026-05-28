@@ -2,13 +2,16 @@ import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:domain_visualiser/converters/ilist_converters.dart';
 
 part 'store_class_boxes_action.freezed.dart';
 part 'store_class_boxes_action.g.dart';
 
 @freezed
-class StoreClassBoxesAction with _$StoreClassBoxesAction, ReduxAction {
-  factory StoreClassBoxesAction(IList<ClassBox> boxes) = _StoreClassBoxesAction;
+abstract class StoreClassBoxesAction with _$StoreClassBoxesAction, ReduxAction {
+  const StoreClassBoxesAction._();
+
+  factory StoreClassBoxesAction(@ClassBoxIListConverter() IList<ClassBox> boxes) = _StoreClassBoxesAction;
 
   factory StoreClassBoxesAction.fromJson(Map<String, dynamic> json) =>
       _$StoreClassBoxesActionFromJson(json);

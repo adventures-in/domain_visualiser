@@ -6,8 +6,9 @@ part 'remove_problem_action.freezed.dart';
 part 'remove_problem_action.g.dart';
 
 @freezed
-class RemoveProblemAction with _$RemoveProblemAction, ReduxAction {
-  @JsonSerializable(explicitToJson: true)
+abstract class RemoveProblemAction with _$RemoveProblemAction, ReduxAction {
+  const RemoveProblemAction._();
+
   factory RemoveProblemAction({required Problem problem}) =
       _RemoveProblemAction;
 

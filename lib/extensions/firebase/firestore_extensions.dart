@@ -13,20 +13,20 @@ extension ConvertDocumentSnapshot on DocumentSnapshot {
 
     return ProfileData(
         id: id,
-        displayName: data()?['displayName'] as String,
-        photoURL: data()?['photoURL'] as String? ??
+        displayName: (data() as Map<String, dynamic>?)?['displayName'] as String,
+        photoURL: (data() as Map<String, dynamic>?)?['photoURL'] as String? ??
             'https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y',
-        firstName: data()?['firstName'] as String? ?? '_',
-        lastName: data()?['lastName'] as String? ?? '_');
+        firstName: (data() as Map<String, dynamic>?)?['firstName'] as String? ?? '_',
+        lastName: (data() as Map<String, dynamic>?)?['lastName'] as String? ?? '_');
   }
 
   ClassBox toClassBox() => ClassBox(
       id: id,
-      left: data()!['left'] as double,
-      top: data()!['top'] as double,
-      right: data()!['right'] as double,
-      bottom: data()!['bottom'] as double,
-      name: data()?['name'] as String?);
+      left: (data()! as Map<String, dynamic>)['left'] as double,
+      top: (data()! as Map<String, dynamic>)['top'] as double,
+      right: (data()! as Map<String, dynamic>)['right'] as double,
+      bottom: (data()! as Map<String, dynamic>)['bottom'] as double,
+      name: (data() as Map<String, dynamic>?)?['name'] as String?);
 
   ReduxAction toStoreAction(DatabaseSectionEnum section) {
     switch (section) {

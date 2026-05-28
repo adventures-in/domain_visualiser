@@ -5,7 +5,9 @@ part 'sign_in_with_apple_action.freezed.dart';
 part 'sign_in_with_apple_action.g.dart';
 
 @freezed
-class SignInWithAppleAction with _$SignInWithAppleAction, ReduxAction {
+abstract class SignInWithAppleAction with _$SignInWithAppleAction, ReduxAction {
+  const SignInWithAppleAction._();
+
   factory SignInWithAppleAction() = _SignInWithAppleAction;
 
   factory SignInWithAppleAction.fromJson(Map<String, dynamic> json) =>

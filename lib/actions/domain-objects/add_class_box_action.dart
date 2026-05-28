@@ -6,7 +6,9 @@ part 'add_class_box_action.freezed.dart';
 part 'add_class_box_action.g.dart';
 
 @freezed
-class AddClassBoxAction with _$AddClassBoxAction, ReduxAction {
+abstract class AddClassBoxAction with _$AddClassBoxAction, ReduxAction {
+  const AddClassBoxAction._();
+
   factory AddClassBoxAction(ClassBox classBox) = _AddClassBoxAction;
 
   factory AddClassBoxAction.fromJson(Map<String, dynamic> json) =>

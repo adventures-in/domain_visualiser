@@ -6,7 +6,9 @@ part 'connect_data_stream_action.freezed.dart';
 part 'connect_data_stream_action.g.dart';
 
 @freezed
-class ConnectDataStreamAction with _$ConnectDataStreamAction, ReduxAction {
+abstract class ConnectDataStreamAction with _$ConnectDataStreamAction, ReduxAction {
+  const ConnectDataStreamAction._();
+
   factory ConnectDataStreamAction(DatabaseSectionEnum section) =
       _ConnectDatabaseAction;
 

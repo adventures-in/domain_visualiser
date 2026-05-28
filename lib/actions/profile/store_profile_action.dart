@@ -6,8 +6,9 @@ part 'store_profile_action.freezed.dart';
 part 'store_profile_action.g.dart';
 
 @freezed
-class StoreProfileAction with _$StoreProfileAction, ReduxAction {
-  @JsonSerializable(explicitToJson: true)
+abstract class StoreProfileAction with _$StoreProfileAction, ReduxAction {
+  const StoreProfileAction._();
+
   factory StoreProfileAction(ProfileData data) = _StoreProfileDataAction;
 
   factory StoreProfileAction.fromJson(Map<String, dynamic> json) =>

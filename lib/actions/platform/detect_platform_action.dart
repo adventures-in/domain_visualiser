@@ -5,7 +5,9 @@ part 'detect_platform_action.freezed.dart';
 part 'detect_platform_action.g.dart';
 
 @freezed
-class DetectPlatformAction with _$DetectPlatformAction, ReduxAction {
+abstract class DetectPlatformAction with _$DetectPlatformAction, ReduxAction {
+  const DetectPlatformAction._();
+
   factory DetectPlatformAction() = _DetectPlatformAction;
 
   factory DetectPlatformAction.fromJson(Map<String, dynamic> json) =>
