@@ -36,6 +36,8 @@ dependencies:
   # utils 
   uuid: any
   fast_immutable_collections: any
+  crdt: ^5.1.3
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:
