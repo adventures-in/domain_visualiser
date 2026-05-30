@@ -12,6 +12,7 @@ import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/services/auth_service.dart';
 import 'package:domain_visualiser/services/platform_service.dart';
 import 'package:domain_visualiser/sync/graph_sync_backend.dart';
+import 'package:domain_visualiser/graph/hlc_manager.dart';
 import 'package:redux/redux.dart';
 
 /// Middleware is used for a variety of things:
@@ -27,6 +28,8 @@ List<Middleware<AppState>> createAppMiddleware({
   required AuthService authService,
   required GraphSyncBackend backend,
   required PlatformService platformService,
+  required HlcManager hlc,
+  required String originClientId,
 }) {
   return [
     // Auth
@@ -36,8 +39,8 @@ List<Middleware<AppState>> createAppMiddleware({
     SignInWithGoogleMiddleware(authService),
     SignOutMiddleware(authService),
     // Domain Objects
-    AddClassBoxMiddleware(backend, authService),
-    UpdateDomainMiddleware(backend),
+    AddClassBoxMiddleware(backend, authService, hlc, originClientId),
+    UpdateDomainMiddleware(backend, hlc, originClientId),
     // Platform
     DetectPlatformMiddleware(platformService),
     // Shared
