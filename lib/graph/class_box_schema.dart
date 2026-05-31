@@ -1,6 +1,7 @@
 import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 
+import 'container_schema.dart';
 import 'graph_envelope.dart';
 import 'hlc_manager.dart';
 
@@ -13,7 +14,18 @@ import 'hlc_manager.dart';
 ///   Bob drags — both edits survive.
 /// - List units are LWW-whole-list for v1; OR-Set is the named first upgrade
 ///   (see [concept_merge_unit_grain]).
-const NodeSchema classBoxSchema = NodeSchema(
+/// The ClassBox merge-unit grain, with the three universal container units
+/// ([parentUnit], [containerTypeUnit], [zIndexUnit]) layered on via
+/// [withContainerUnits] — that's the wiring that makes [mergeNodes] honour
+/// `parentId`/`containerType`/`zIndex` stamps when syncing a real ClassBox
+/// envelope. Without this, those stamps would round-trip but their payload
+/// fields would never get copied across a merge boundary (P0 from cage-match
+/// review of PR #7).
+///
+/// Cannot be `const` because [withContainerUnits] is not a const constructor
+/// (it builds a non-const `Map` from `base.mergeUnits` + the three injected
+/// units). `final` is fine — the schema is initialized once at app start.
+final NodeSchema classBoxSchema = withContainerUnits(const NodeSchema(
   type: 'ClassBox',
   mergeUnits: {
     'geometry': ['left', 'top', 'right', 'bottom'],
@@ -23,7 +35,7 @@ const NodeSchema classBoxSchema = NodeSchema(
     'staticVariables': ['staticVariables'],
     'instanceVariables': ['instanceVariables'],
   },
-);
+));
 
 /// Reserved key in the Firestore document holding the CRDT envelope. Keeping
 /// it under a single `__envelope__` key (rather than spraying `_geom_hlc`,
