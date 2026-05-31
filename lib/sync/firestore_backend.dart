@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:domain_visualiser/actions/domain-objects/store_class_boxes_action.dart';
 import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/enums/database/database_section_enum.dart';
+import 'package:domain_visualiser/sync/sync_section.dart';
 import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
 import 'package:domain_visualiser/graph/class_box_schema.dart';
 import 'package:domain_visualiser/graph/graph_envelope.dart';
@@ -23,16 +23,16 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 /// the backend of local writes so the cache stays authoritative for both
 /// origins.
 class FirestoreBackend implements GraphSyncBackend {
-  /// A map of DatabaseSectionEnum to database location
-  static const locationOf = <DatabaseSectionEnum, String>{
-    DatabaseSectionEnum.classBoxes: 'domain-objects',
-    DatabaseSectionEnum.profile: 'profile'
+  /// A map of SyncSection to database location
+  static const locationOf = <SyncSection, String>{
+    SyncSection.classBoxes: 'domain-objects',
+    SyncSection.profile: 'profile'
   };
 
   final FirebaseFirestore _firestore;
 
   /// Keep track of the subscriptions so we can cancel them later.
-  final Map<DatabaseSectionEnum, StreamSubscription> _subscriptions = {};
+  final Map<SyncSection, StreamSubscription> _subscriptions = {};
 
   /// The [_eventsController] is connected to the redux [Store] via
   /// [actionStream] and is used to add actions to the stream where they will
@@ -61,7 +61,7 @@ class FirestoreBackend implements GraphSyncBackend {
         _origin = origin;
 
   @override
-  void connect(DatabaseSectionEnum section) {
+  void connect(SyncSection section) {
     try {
       _subscriptions[section] = _firestore
           .collection(locationOf[section]!)
@@ -92,8 +92,8 @@ class FirestoreBackend implements GraphSyncBackend {
   /// echo (e.g. another tab issued a later HLC under a different origin id —
   /// by design two devices have distinct origins) is merged normally.
   void _absorbRemoteSnapshot(
-      QuerySnapshot snapshot, DatabaseSectionEnum section) {
-    if (section != DatabaseSectionEnum.classBoxes) return;
+      QuerySnapshot snapshot, SyncSection section) {
+    if (section != SyncSection.classBoxes) return;
     var anyChange = false;
     for (final change in snapshot.docChanges) {
       final doc = change.doc;
@@ -190,7 +190,7 @@ class FirestoreBackend implements GraphSyncBackend {
   }
 
   @override
-  void disconnect(DatabaseSectionEnum section) =>
+  void disconnect(SyncSection section) =>
       _subscriptions[section]?.cancel();
 
   @override
@@ -231,7 +231,7 @@ class FirestoreBackend implements GraphSyncBackend {
     _replica[incoming.id] = localMerged;
 
     final ref = _firestore
-        .doc('${locationOf[DatabaseSectionEnum.classBoxes]}/${incoming.id}');
+        .doc('${locationOf[SyncSection.classBoxes]}/${incoming.id}');
     try {
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(ref);

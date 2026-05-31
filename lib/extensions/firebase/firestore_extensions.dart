@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:domain_visualiser/actions/profile/store_profile_action.dart';
 import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/enums/database/database_section_enum.dart';
+import 'package:domain_visualiser/sync/sync_section.dart';
 import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:domain_visualiser/models/profile/profile_data.dart';
 
@@ -28,11 +28,11 @@ extension ConvertDocumentSnapshot on DocumentSnapshot {
       bottom: (data()! as Map<String, dynamic>)['bottom'] as double,
       name: (data() as Map<String, dynamic>?)?['name'] as String?);
 
-  ReduxAction toStoreAction(DatabaseSectionEnum section) {
+  ReduxAction toStoreAction(SyncSection section) {
     switch (section) {
-      case DatabaseSectionEnum.classBoxes:
+      case SyncSection.classBoxes:
       // return StoreClassBoxesAction(data());
-      case DatabaseSectionEnum.profile:
+      case SyncSection.profile:
         return StoreProfileAction(toProfileData());
     }
   }

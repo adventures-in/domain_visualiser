@@ -13,10 +13,10 @@ class ConnectDataStreamMiddleware
           try {
             backend.connect(action.section);
             // switch (action.section) {
-            //   case DatabaseSectionEnum.profileData:
+            //   case SyncSection.profileData:
             //     // databaseService.connectProfileData(uid: store.state.authUserData?.uid ?? '-');
             //     break;
-            //   case DatabaseSectionEnum.classBoxes:
+            //   case SyncSection.classBoxes:
             //     break;
             // }
           } catch (error, trace) {

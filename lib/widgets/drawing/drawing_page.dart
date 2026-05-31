@@ -1,5 +1,5 @@
 import 'package:domain_visualiser/actions/shared/connect_data_stream_action.dart';
-import 'package:domain_visualiser/enums/database/database_section_enum.dart';
+import 'package:domain_visualiser/sync/sync_section.dart';
 import 'package:domain_visualiser/extensions/flutter/context_extensions.dart';
 import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
@@ -27,7 +27,7 @@ class DrawingPage extends StatelessWidget {
         Expanded(
           child: StoreConnector<AppState, IList<ClassBox>>(
               onInit: (store) => context.dispatch(
-                  ConnectDataStreamAction(DatabaseSectionEnum.classBoxes)),
+                  ConnectDataStreamAction(SyncSection.classBoxes)),
               distinct: true,
               converter: (store) => store.state.classBoxes,
               builder: (context, boxes) => DrawingCanvas(boxes.unlockView)),
