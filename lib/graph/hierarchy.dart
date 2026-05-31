@@ -33,9 +33,13 @@ GraphNode? parentOf(GraphNode node, Map<String, GraphNode> byId) {
 /// fractional zIndex; missing zIndex sorts before any string so unordered
 /// inserts cluster at the start in a stable position).
 ///
-/// Tombstoned children are filtered out. O(n) scan plus an O(k log k) sort
-/// where k = #children. Cache externally if you call this in a hot loop.
+/// Tombstoned children are filtered out. If [parent] itself is tombstoned the
+/// result is empty — its (would-be) children are surfaced as roots by [roots]
+/// per the dangling-parent rule, so [children] and [roots] agree about who
+/// owns them. O(n) scan plus an O(k log k) sort where k = #children. Cache
+/// externally if you call this in a hot loop.
 Iterable<GraphNode> children(GraphNode parent, Iterable<GraphNode> all) {
+  if (parent.isDeleted) return const <GraphNode>[];
   final out = <GraphNode>[];
   for (final n in all) {
     if (n.isDeleted) continue;
@@ -47,7 +51,11 @@ Iterable<GraphNode> children(GraphNode parent, Iterable<GraphNode> all) {
 
 /// Root-level nodes from [all]: those whose [parentIdOf] is null OR points at
 /// a deleted/missing parent (dangling — resolved as root per the file-level
-/// doc). Sorted by z-index for render order.
+/// doc) OR sits in a parent-pointer cycle (a concurrent reparent collision
+/// like Alice: a→b / Bob: b→a — see [inCycle]). Cyclic nodes are promoted to
+/// root so the renderer has something to draw rather than spinning forever
+/// looking for an ancestor that isn't there. Sorted by z-index for render
+/// order.
 Iterable<GraphNode> roots(Iterable<GraphNode> all) {
   final byId = <String, GraphNode>{for (final n in all) n.id: n};
   final out = <GraphNode>[];
@@ -56,9 +64,15 @@ Iterable<GraphNode> roots(Iterable<GraphNode> all) {
     final pid = parentIdOf(n);
     if (pid == null) {
       out.add(n);
-    } else {
-      final p = byId[pid];
-      if (p == null || p.isDeleted) out.add(n); // dangling → root
+      continue;
+    }
+    final p = byId[pid];
+    if (p == null || p.isDeleted) {
+      out.add(n); // dangling → root
+      continue;
+    }
+    if (inCycle(n, byId)) {
+      out.add(n); // cyclic → promote to root (break the cycle at read-time)
     }
   }
   out.sort(_byZIndex);
@@ -67,16 +81,50 @@ Iterable<GraphNode> roots(Iterable<GraphNode> all) {
 
 /// All transitive descendants of [parent] in [all], depth-first, each level
 /// in z-order. Excludes [parent] itself. Tombstoned subtrees are skipped.
+///
+/// **Cycle-safe.** Two peers concurrently reparenting (Alice: a→b, Bob: b→a)
+/// each pass [wouldCreateCycle] against their local replica, then merge into
+/// a cycle. The walk carries a `visited` set and short-circuits on any node
+/// it has already yielded — terminating after at most O(n) steps even on a
+/// pathological loop. The cycle is still observable to the renderer (both
+/// nodes have live parents), but the iterator can't OOM.
 Iterable<GraphNode> descendants(
   GraphNode parent,
   Iterable<GraphNode> all,
 ) sync* {
   // Materialize once so the recursive walk doesn't re-iterate a generator.
   final list = List<GraphNode>.unmodifiable(all);
+  yield* _descendantsWalk(parent, list, <String>{parent.id});
+}
+
+Iterable<GraphNode> _descendantsWalk(
+  GraphNode parent,
+  List<GraphNode> list,
+  Set<String> visited,
+) sync* {
   for (final c in children(parent, list)) {
+    if (!visited.add(c.id)) continue; // cycle — stop descending here
     yield c;
-    yield* descendants(c, list);
+    yield* _descendantsWalk(c, list, visited);
   }
+}
+
+/// True if [node] sits in a parent-pointer cycle within [byId] (its own
+/// ancestor chain loops back through itself). A defensive read-time check so
+/// renderers can promote the cyclic component to root rather than spin.
+bool inCycle(GraphNode node, Map<String, GraphNode> byId) {
+  final seen = <String>{node.id};
+  var cur = parentOf(node, byId);
+  while (cur != null) {
+    if (cur.id == node.id) return true;
+    if (!seen.add(cur.id)) {
+      // Loop that doesn't include `node` — `node` itself isn't in the cycle,
+      // its chain is just polluted upstream. Treat as not-in-its-own-cycle.
+      return false;
+    }
+    cur = parentOf(cur, byId);
+  }
+  return false;
 }
 
 /// Walks parent pointers from [node] up to root. Stops at null OR at the
