@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
+import 'package:domain_visualiser/graph/hlc_manager.dart';
+import 'package:domain_visualiser/graph/origin_client_id.dart';
 import 'package:domain_visualiser/middleware/app_middleware.dart';
 import 'package:domain_visualiser/models/app-state/app_state.dart';
 import 'package:domain_visualiser/reducers/app_reducer.dart';
@@ -31,27 +33,40 @@ class ReduxBundle {
 
   /// Services
   final AuthService _authService;
-  final GraphSyncBackend _backend;
+  final GraphSyncBackend? _injectedBackend;
   final PlatformService _platformService;
+  final OriginClientIdProvider _originProvider;
 
   ReduxBundle(
       {List<Middleware>? extraMiddlewares,
       AuthService? authService,
       GraphSyncBackend? backend,
-      PlatformService? platformService})
+      PlatformService? platformService,
+      OriginClientIdProvider? originProvider})
       : _authService = authService ?? AuthService(),
-        _backend = backend ?? FirestoreBackend(),
-        _platformService = platformService ?? PlatformService();
+        _injectedBackend = backend,
+        _platformService = platformService ?? PlatformService(),
+        _originProvider =
+            originProvider ?? SharedPreferencesOriginClientId();
 
   Future<Store<AppState>> createStore() async {
+    // Resolve the stable origin first so HLC and FirestoreBackend share it.
+    final originClientId = await _originProvider.get();
+    final hlc = HlcManager(nodeId: originClientId);
+    final backend = _injectedBackend ??
+        FirestoreBackend(hlc: hlc, origin: originClientId);
+
     final _store = Store<AppState>(
       appReducer,
       initialState: AppState.init(),
       middleware: [
         ...createAppMiddleware(
-            authService: _authService,
-            backend: _backend,
-            platformService: _platformService),
+          authService: _authService,
+          backend: backend,
+          platformService: _platformService,
+          hlc: hlc,
+          originClientId: originClientId,
+        ),
         ..._extraMiddlewares
       ],
     );

@@ -1,6 +1,6 @@
 import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/enums/database/database_section_enum.dart';
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
+import 'package:domain_visualiser/graph/graph_envelope.dart';
 
 /// A backend that persists graph nodes and streams remote changes back into
 /// the Redux store.
@@ -10,12 +10,12 @@ import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 /// transport later) without touching middleware — only `ReduxBundle` names the
 /// concrete backend.
 ///
-/// Scope (honest, per cage-match #4): this contract is still **Redux-coupled**
-/// ([actionStream] is a `Stream<ReduxAction>`) and carries domvis's own
-/// [DomainObject], not the generic stamped `GraphNode`. Widening it to the
-/// `GraphNode` envelope + CRDT changesets — the step that actually lets an
-/// agent-peer or MQTT transport publish through this seam — is the next
-/// increment. See `docs/adr/0001-graph-envelope.md`.
+/// **Scope (task #10, 2026-05-31; cage-match fixes 2026-05-31):** the contract
+/// carries the generic [GraphNode] envelope. The earlier draft kept legacy
+/// envelope-less `addNode`/`updateNode` entry points "for unported callers";
+/// nothing actually called them and they offered a way to ship writes without
+/// CRDT metadata, so they've been removed. Every persistence path must go
+/// through [addGraphNode]/[updateGraphNode] and arrive with stamps.
 abstract interface class GraphSyncBackend {
   /// Actions produced by remote changes, to be dispatched into the store.
   ///
@@ -28,10 +28,14 @@ abstract interface class GraphSyncBackend {
   /// Stop observing [section].
   void disconnect(DatabaseSectionEnum section);
 
-  /// Persist a newly-created node. Takes [DomainObject] (not a concrete union
-  /// case) so creation and update share one symmetric contract.
-  Future<void> addNode(DomainObject node);
+  /// Persist a stamped envelope for a newly-created node. Implementations must
+  /// merge with any pre-existing on-wire copy (two replicas can race a create
+  /// for the same id) so the surviving doc reflects both stamps.
+  Future<void> addGraphNode(GraphNode node);
 
-  /// Persist an update to an existing node.
-  Future<void> updateNode(DomainObject node);
+  /// Persist a partial-update envelope; only the units present in
+  /// [GraphNode.stamps] are considered authored by this write. Implementations
+  /// must merge with the on-wire copy so absent units retain their existing
+  /// stamps.
+  Future<void> updateGraphNode(GraphNode node);
 }
