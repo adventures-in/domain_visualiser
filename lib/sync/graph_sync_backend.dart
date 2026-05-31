@@ -1,5 +1,5 @@
 import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/enums/database/database_section_enum.dart';
+import 'package:domain_visualiser/sync/sync_section.dart';
 import 'package:domain_visualiser/graph/graph_envelope.dart';
 
 /// A backend that persists graph nodes and streams remote changes back into
@@ -23,10 +23,10 @@ abstract interface class GraphSyncBackend {
   Stream<ReduxAction> get actionStream;
 
   /// Begin observing [section]; changes are emitted on [actionStream].
-  void connect(DatabaseSectionEnum section);
+  void connect(SyncSection section);
 
   /// Stop observing [section].
-  void disconnect(DatabaseSectionEnum section);
+  void disconnect(SyncSection section);
 
   /// Persist a stamped envelope for a newly-created node. Implementations must
   /// merge with any pre-existing on-wire copy (two replicas can race a create

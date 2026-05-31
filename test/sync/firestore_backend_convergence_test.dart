@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:domain_visualiser/actions/domain-objects/store_class_boxes_action.dart';
 import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/enums/database/database_section_enum.dart';
+import 'package:domain_visualiser/sync/sync_section.dart';
 import 'package:domain_visualiser/graph/class_box_schema.dart';
 import 'package:domain_visualiser/graph/graph_envelope.dart';
 import 'package:domain_visualiser/graph/hlc_manager.dart';
@@ -28,7 +28,7 @@ void main() {
         () async {
       final shared = FakeFirebaseFirestore();
       final docPath =
-          '${FirestoreBackend.locationOf[DatabaseSectionEnum.classBoxes]}/box-1';
+          '${FirestoreBackend.locationOf[SyncSection.classBoxes]}/box-1';
 
       // Seed a base doc both writers will diverge from. We hand-craft the
       // envelope rather than going through a backend so the starting stamps
@@ -149,7 +149,7 @@ void main() {
         hlc: HlcManager(nodeId: 'charlie'),
         origin: 'charlie',
       );
-      charlie.connect(DatabaseSectionEnum.classBoxes);
+      charlie.connect(SyncSection.classBoxes);
       // Let the snapshot listener fire.
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
@@ -160,7 +160,7 @@ void main() {
       expect(box.name, 'Renamed');
 
       await charlieSub.cancel();
-      charlie.disconnect(DatabaseSectionEnum.classBoxes);
+      charlie.disconnect(SyncSection.classBoxes);
     });
 
     test(
@@ -227,7 +227,7 @@ void main() {
       await bob.addGraphNode(bobCreate);
 
       final docPath =
-          '${FirestoreBackend.locationOf[DatabaseSectionEnum.classBoxes]}/box-2';
+          '${FirestoreBackend.locationOf[SyncSection.classBoxes]}/box-2';
       final landed = (await shared.doc(docPath).get()).data()!;
       // Whoever's stamps sort higher wins each unit — the test asserts
       // convergence, not who wins. Both fields must come from the same

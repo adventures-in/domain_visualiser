@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:domain_visualiser/actions/domain-objects/add_class_box_action.dart';
 import 'package:domain_visualiser/actions/domain-objects/update_domain_action.dart';
 import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/enums/database/database_section_enum.dart';
+import 'package:domain_visualiser/sync/sync_section.dart';
 import 'package:domain_visualiser/graph/class_box_schema.dart';
 import 'package:domain_visualiser/graph/graph_envelope.dart';
 import 'package:domain_visualiser/graph/hlc_manager.dart';
@@ -29,10 +29,10 @@ class FakeGraphSyncBackend implements GraphSyncBackend {
   Stream<ReduxAction> get actionStream => _controller.stream;
 
   @override
-  void connect(DatabaseSectionEnum section) {}
+  void connect(SyncSection section) {}
 
   @override
-  void disconnect(DatabaseSectionEnum section) {}
+  void disconnect(SyncSection section) {}
 
   @override
   Future<void> addGraphNode(GraphNode node) async => addedNodes.add(node);
