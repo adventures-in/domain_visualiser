@@ -48,10 +48,14 @@ class HlcManager {
     if (remoteHlc.nodeId == nodeId) return;
     try {
       _last = _last.merge(remoteHlc, wallTime: _now().toUtc());
-    } on ClockDriftException {
+    } on ClockDriftException catch (e) {
       // Remote clock is too far ahead — drop the observation rather than
       // poison the local clock; next local `issue` will still advance off the
-      // local wall time.
+      // local wall time. Log a breadcrumb so a real-world drift incident is
+      // visible without breaking the merge.
+      // ignore: avoid_print
+      print('[HlcManager] dropped remote HLC from ${remoteHlc.nodeId}: $e '
+          '(local=$_last)');
     }
   }
 }

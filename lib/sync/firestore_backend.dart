@@ -8,7 +8,6 @@ import 'package:domain_visualiser/extensions/redux/actions_stream_controller_ext
 import 'package:domain_visualiser/graph/class_box_schema.dart';
 import 'package:domain_visualiser/graph/graph_envelope.dart';
 import 'package:domain_visualiser/graph/hlc_manager.dart';
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 import 'package:domain_visualiser/sync/graph_sync_backend.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 
@@ -79,8 +78,14 @@ class FirestoreBackend implements GraphSyncBackend {
     }
   }
 
-  /// Merges every doc in [snapshot] into [_replica] and emits a
+  /// Merges every change in [snapshot] into [_replica] and emits a
   /// [StoreClassBoxesAction] projecting the converged view.
+  ///
+  /// We iterate [QuerySnapshot.docChanges] rather than [QuerySnapshot.docs] so
+  /// that [DocumentChangeType.removed] events strip the corresponding entry
+  /// from [_replica] — otherwise a hard-deleted Firestore doc (out-of-band
+  /// console delete, manual cleanup, anything that bypasses our tombstone
+  /// path) would leave a zombie in the in-memory cache.
   ///
   /// Echo-suppression: a doc whose envelope stamps are ALL from this origin
   /// and are byte-equal to what we already hold is skipped. A non-byte-equal
@@ -90,7 +95,12 @@ class FirestoreBackend implements GraphSyncBackend {
       QuerySnapshot snapshot, DatabaseSectionEnum section) {
     if (section != DatabaseSectionEnum.classBoxes) return;
     var anyChange = false;
-    for (final doc in snapshot.docs) {
+    for (final change in snapshot.docChanges) {
+      final doc = change.doc;
+      if (change.type == DocumentChangeType.removed) {
+        if (_replica.remove(doc.id) != null) anyChange = true;
+        continue;
+      }
       final data = doc.data() as Map<String, dynamic>?;
       if (data == null) continue;
       final incoming = _readGraphNodeFromDoc(doc.id, data);
@@ -184,57 +194,56 @@ class FirestoreBackend implements GraphSyncBackend {
       _subscriptions[section]?.cancel();
 
   @override
-  Future<void> addNode(DomainObject node) async {
-    try {
-      await _firestore
-          .doc('${_getPath(node)}/${node.id}')
-          .set(node.toJson());
-    } catch (error, trace) {
-      _eventsController.addProblem(error, trace);
-    }
-  }
-
-  @override
-  Future<void> updateNode(DomainObject node) async {
-    try {
-      await _firestore
-          .doc('${_getPath(node)}/${node.id}')
-          .update(node.toJson());
-    } catch (error, trace) {
-      _eventsController.addProblem(error, trace);
-    }
-  }
-
-  @override
   Future<void> addGraphNode(GraphNode node) async {
-    _replica[node.id] = node;
-    try {
-      final doc = _toFirestoreDoc(node);
-      await _firestore
-          .doc('${locationOf[DatabaseSectionEnum.classBoxes]}/${node.id}')
-          .set(doc);
-    } catch (error, trace) {
-      _eventsController.addProblem(error, trace);
-    }
+    // A create goes through the same read-merge-write transaction as an
+    // update, so two replicas that both call addGraphNode on the same id
+    // converge instead of clobbering. Atomic-doc semantics matter most for
+    // updates, but applying them uniformly keeps the code (and reasoning)
+    // honest.
+    await _writeMerged(node);
   }
 
   @override
   Future<void> updateGraphNode(GraphNode node) async {
-    // Merge into local replica first so the in-memory view reflects the write
-    // immediately (and the upcoming Firestore echo will be a pure-echo skip).
-    final existing = _replica[node.id];
-    final merged =
-        existing == null ? node : mergeNodes(existing, node, classBoxSchema);
-    _replica[node.id] = merged;
+    await _writeMerged(node);
+  }
+
+  /// Atomically reads the on-wire doc, merges [incoming] against it under
+  /// [classBoxSchema], and writes the merged envelope back inside a Firestore
+  /// transaction.
+  ///
+  /// Why a transaction (rather than `.set()` after an in-memory merge):
+  /// concurrent writers with the *same* local replica each call `.set()` with
+  /// their own merged document, and whichever lands last in Firestore wins —
+  /// silently overwriting the other's edits in the durable store. (Live
+  /// listeners converge in memory; a fresh-joining client reads the stale
+  /// doc.) A transaction reads the current Firestore state inside the same
+  /// atomic write, so the merge happens against the actual on-wire base. The
+  /// merge logic itself is unchanged — [mergeNodes] is commutative — so this
+  /// closes the durability hole without altering convergence semantics.
+  Future<void> _writeMerged(GraphNode incoming) async {
+    // Reflect the write in the local replica immediately so the in-memory
+    // view is responsive (Firestore echo will then be a pure-echo skip).
+    final localExisting = _replica[incoming.id];
+    final localMerged = localExisting == null
+        ? incoming
+        : mergeNodes(localExisting, incoming, classBoxSchema);
+    _replica[incoming.id] = localMerged;
+
+    final ref = _firestore
+        .doc('${locationOf[DatabaseSectionEnum.classBoxes]}/${incoming.id}');
     try {
-      // Write the merged envelope (not just the partial) so a fresh reader
-      // gets the complete stamp set on first read. We lean on Firestore's
-      // last-write-wins at doc level + per-unit merge at read time to keep
-      // concurrent writers convergent.
-      final doc = _toFirestoreDoc(merged);
-      await _firestore
-          .doc('${locationOf[DatabaseSectionEnum.classBoxes]}/${node.id}')
-          .set(doc);
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        final remoteData = snap.data();
+        final remoteNode = (remoteData == null)
+            ? null
+            : _readGraphNodeFromDoc(incoming.id, remoteData);
+        final mergedForWire = remoteNode == null
+            ? incoming
+            : mergeNodes(remoteNode, incoming, classBoxSchema);
+        tx.set(ref, _toFirestoreDoc(mergedForWire));
+      });
     } catch (error, trace) {
       _eventsController.addProblem(error, trace);
     }
@@ -251,22 +260,4 @@ class FirestoreBackend implements GraphSyncBackend {
 
   @override
   Stream<ReduxAction> get actionStream => _eventsController.stream;
-
-  String _getPath(DomainObject object) {
-    return object.when<String>(
-        classBox: (String? type,
-                String id,
-                int? flightTime,
-                String? userId,
-                double left,
-                double top,
-                double right,
-                double bottom,
-                String? name,
-                IList<String>? staticMethods,
-                IList<String>? instanceMethods,
-                IList<String>? staticVariables,
-                IList<String>? instanceVariables) =>
-            'domain-objects');
-  }
 }

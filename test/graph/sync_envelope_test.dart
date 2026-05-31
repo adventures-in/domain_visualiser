@@ -23,8 +23,6 @@ import 'package:redux/redux.dart';
 class FakeGraphSyncBackend implements GraphSyncBackend {
   final addedNodes = <GraphNode>[];
   final updatedNodes = <GraphNode>[];
-  final addedLegacy = <DomainObject>[];
-  final updatedLegacy = <DomainObject>[];
   final _controller = StreamController<ReduxAction>.broadcast();
 
   @override
@@ -35,12 +33,6 @@ class FakeGraphSyncBackend implements GraphSyncBackend {
 
   @override
   void disconnect(DatabaseSectionEnum section) {}
-
-  @override
-  Future<void> addNode(DomainObject node) async => addedLegacy.add(node);
-
-  @override
-  Future<void> updateNode(DomainObject node) async => updatedLegacy.add(node);
 
   @override
   Future<void> addGraphNode(GraphNode node) async => addedNodes.add(node);

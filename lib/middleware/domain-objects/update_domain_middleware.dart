@@ -17,8 +17,23 @@ class UpdateDomainMiddleware
     HlcManager hlc,
     String origin,
   ) : super((store, action, next) async {
-          // Read previous state BEFORE the reducer applies the update — the
-          // only place we can diff against the on-store version.
+          // Type guard — `UpdateDomainAction.object` is the abstract
+          // [DomainObject], and a future variant (Edge, GroupBox, …) routing
+          // through here without its own middleware would crash on the cast
+          // below. Pass through to the reducer and exit; do not silently
+          // swallow, but also do not throw before the reducer runs.
+          if (action.object is! ClassBox) {
+            next(action);
+            return;
+          }
+
+          // ORDERING NOTE: we read store.state.classBoxes BEFORE calling
+          // next(action). That requires this middleware run synchronously
+          // ahead of any other middleware that might mutate the store state
+          // for the same id (none exist today). If a future middleware in the
+          // chain DOES dispatch a state-changing side effect on
+          // UpdateDomainAction, register it AFTER UpdateDomainMiddleware in
+          // createAppMiddleware so the "previous" read here is still pre-edit.
           final previous = _findClassBox(store.state, action.object.id);
           next(action);
 

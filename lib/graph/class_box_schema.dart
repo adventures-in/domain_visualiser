@@ -82,16 +82,19 @@ GraphNode classBoxToGraphNodePartial({
   if (updated.name != previous.name) {
     stamps['label'] = stamp();
   }
-  if (!_iListEq(updated.staticMethods, previous.staticMethods)) {
+  // IList overrides == for deep value equality (fast_immutable_collections
+  // ^11), so the previous hand-rolled `_iListEq` was just reinventing the
+  // built-in. Direct `!=` it is.
+  if (updated.staticMethods != previous.staticMethods) {
     stamps['staticMethods'] = stamp();
   }
-  if (!_iListEq(updated.instanceMethods, previous.instanceMethods)) {
+  if (updated.instanceMethods != previous.instanceMethods) {
     stamps['instanceMethods'] = stamp();
   }
-  if (!_iListEq(updated.staticVariables, previous.staticVariables)) {
+  if (updated.staticVariables != previous.staticVariables) {
     stamps['staticVariables'] = stamp();
   }
-  if (!_iListEq(updated.instanceVariables, previous.instanceVariables)) {
+  if (updated.instanceVariables != previous.instanceVariables) {
     stamps['instanceVariables'] = stamp();
   }
   return GraphNode(
@@ -107,6 +110,15 @@ GraphNode classBoxToGraphNodePartial({
 /// Defensive: missing payload fields fall back to the existing [base] (if
 /// supplied) or to neutral defaults — a remote producer that omits a unit
 /// shouldn't crash the converter.
+///
+/// [_payloadOf] carries the identity-adjacent fields [ClassBox.userId] and
+/// [ClassBox.flightTime] alongside the mutable units. They are written once at
+/// create-time and are not declared in any merge unit, so a partial-update
+/// envelope (which omits them) still preserves them via the read-merge-write
+/// transaction in [FirestoreBackend]: an absent field in [incoming.payload]
+/// does NOT overwrite the remote field, because [mergeNodes] only copies
+/// payload entries belonging to a unit whose stamp wins. Cold readers see them
+/// because the doc has carried them since create.
 ClassBox graphNodeToClassBox(GraphNode node, {ClassBox? base}) {
   final p = node.payload;
   return ClassBox(
@@ -121,8 +133,8 @@ ClassBox graphNodeToClassBox(GraphNode node, {ClassBox? base}) {
     staticVariables: _readIList(p['staticVariables']) ?? base?.staticVariables,
     instanceVariables:
         _readIList(p['instanceVariables']) ?? base?.instanceVariables,
-    userId: base?.userId,
-    flightTime: base?.flightTime,
+    userId: p['userId'] as String? ?? base?.userId,
+    flightTime: (p['flightTime'] as num?)?.toInt() ?? base?.flightTime,
   );
 }
 
@@ -133,6 +145,10 @@ bool nodeIsPureEcho(GraphNode node, String origin) =>
     node.stamps.isNotEmpty &&
     node.stamps.values.every((s) => s.origin == origin);
 
+/// Builds the schema-payload from a ClassBox. Identity-adjacent fields
+/// (`userId`, `flightTime`) ride along even though they're not in any merge
+/// unit — see `graphNodeToClassBox` doc for why this is safe under partial
+/// updates.
 Map<String, Object?> _payloadOf(ClassBox b) => {
       'left': b.left,
       'top': b.top,
@@ -147,20 +163,12 @@ Map<String, Object?> _payloadOf(ClassBox b) => {
         'staticVariables': b.staticVariables!.toList(),
       if (b.instanceVariables != null)
         'instanceVariables': b.instanceVariables!.toList(),
+      if (b.userId != null) 'userId': b.userId,
+      if (b.flightTime != null) 'flightTime': b.flightTime,
     };
 
 IList<String>? _readIList(Object? raw) {
   if (raw == null) return null;
   if (raw is List) return IList(raw.map((e) => e as String));
   return null;
-}
-
-bool _iListEq(IList<String>? a, IList<String>? b) {
-  if (identical(a, b)) return true;
-  if (a == null || b == null) return a == b;
-  if (a.length != b.length) return false;
-  for (var i = 0; i < a.length; i++) {
-    if (a[i] != b[i]) return false;
-  }
-  return true;
 }

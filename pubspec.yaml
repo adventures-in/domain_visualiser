@@ -48,6 +48,7 @@ dev_dependencies:
 
   build_runner: any
   freezed: any
+  fake_cloud_firestore: ^4.1.1
 
 flutter:
   uses-material-design: true

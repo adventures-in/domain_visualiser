@@ -1,7 +1,6 @@
 import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/enums/database/database_section_enum.dart';
 import 'package:domain_visualiser/graph/graph_envelope.dart';
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 
 /// A backend that persists graph nodes and streams remote changes back into
 /// the Redux store.
@@ -11,12 +10,12 @@ import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
 /// transport later) without touching middleware — only `ReduxBundle` names the
 /// concrete backend.
 ///
-/// **Scope (task #10, 2026-05-31):** the contract now carries the generic
-/// [GraphNode] envelope alongside the legacy [DomainObject] entry points. The
-/// envelope methods ([addGraphNode] / [updateGraphNode]) are what new
-/// middleware uses; the old `addNode` / `updateNode` remain so any caller that
-/// hasn't been ported yet still works (envelope-less writes degrade to LWW at
-/// row grain, matching pre-task-#10 behaviour).
+/// **Scope (task #10, 2026-05-31; cage-match fixes 2026-05-31):** the contract
+/// carries the generic [GraphNode] envelope. The earlier draft kept legacy
+/// envelope-less `addNode`/`updateNode` entry points "for unported callers";
+/// nothing actually called them and they offered a way to ship writes without
+/// CRDT metadata, so they've been removed. Every persistence path must go
+/// through [addGraphNode]/[updateGraphNode] and arrive with stamps.
 abstract interface class GraphSyncBackend {
   /// Actions produced by remote changes, to be dispatched into the store.
   ///
@@ -29,16 +28,9 @@ abstract interface class GraphSyncBackend {
   /// Stop observing [section].
   void disconnect(DatabaseSectionEnum section);
 
-  /// Persist a newly-created node (legacy / envelope-less path).
-  Future<void> addNode(DomainObject node);
-
-  /// Persist an update to an existing node (legacy / envelope-less path).
-  Future<void> updateNode(DomainObject node);
-
-  /// Persist a stamped envelope — the CRDT-aware path used by all new
-  /// middleware. The transport must write the envelope alongside (or wrapping)
-  /// the payload so a remote replica can recover stamps on read and merge
-  /// concurrent edits via `mergeNodes`.
+  /// Persist a stamped envelope for a newly-created node. Implementations must
+  /// merge with any pre-existing on-wire copy (two replicas can race a create
+  /// for the same id) so the surviving doc reflects both stamps.
   Future<void> addGraphNode(GraphNode node);
 
   /// Persist a partial-update envelope; only the units present in
