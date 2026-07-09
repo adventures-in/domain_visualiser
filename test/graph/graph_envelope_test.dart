@@ -125,6 +125,13 @@ void main() {
           reason: 'winner omitted it → absent, not null');
     });
 
+    test('wrong schema fails closed at runtime (schema.type != node.type)', () {
+      final a = _box(payload: {'name': 'A'}, stamps: {'label': _stamp('a', 1)});
+      final b = _box(payload: {'name': 'B'}, stamps: {'label': _stamp('b', 2)});
+      const wrongSchema = NodeSchema(type: 'Frame', mergeUnits: {'label': ['name']});
+      expect(() => mergeNodes(a, b, wrongSchema), throwsStateError);
+    });
+
     test('divergent node id fails closed at runtime (StateError, not assert)', () {
       final a = _box(payload: {'name': 'A'}, stamps: {'label': _stamp('a', 1)});
       final b = GraphNode(

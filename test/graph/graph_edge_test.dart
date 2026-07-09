@@ -145,6 +145,21 @@ void main() {
       expect(ab.payload['text'], 'b');
     });
 
+    test('equal stamps with divergent payload fail closed (corruption)', () {
+      // Same (hlc, origin) stamp on both sides but different values — a stamp
+      // must identify exactly one write, so this is corruption, not concurrency.
+      // wins() is strict, so without the guard this silently keeps local.
+      final a = _edge(
+        payload: {'text': 'a', 'temperature': 1},
+        stamps: {'body': _stamp('same', 1)},
+      );
+      final b = _edge(
+        payload: {'text': 'DIFFERENT', 'temperature': 1},
+        stamps: {'body': _stamp('same', 1)}, // identical stamp
+      );
+      expect(() => mergeEdges(a, b, _terminusSchema), throwsStateError);
+    });
+
     test('idempotent — merging an edge with itself is a no-op', () {
       final edge = _edge(
         payload: {'text': 'a', 'temperature': 3, 'voice': 'Maxwell'},

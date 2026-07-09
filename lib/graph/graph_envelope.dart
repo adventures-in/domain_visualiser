@@ -74,6 +74,13 @@ class FieldStamp {
 /// belong to a merge unit. The reserved unit [tombstoneUnit] carries the
 /// liveness flag so deletion LWWs against edits through the exact same path
 /// (a late edit with a higher HLC resurrects; a late delete wins — uniformly).
+///
+/// **Write-side contract** (what keeps the merge convergent — see [_mergeUnits]):
+/// every payload field a writer emits MUST belong to a declared merge unit, and
+/// a unit write carries the whole unit's field set (a sparse write is a
+/// *replacement*: an omitted co-unit field is removed on merge, not patched).
+/// Payload keys outside all units are outside the merge contract and their
+/// convergence is not guaranteed.
 class NodeSchema {
   const NodeSchema({required this.type, required this.mergeUnits});
 
@@ -153,6 +160,15 @@ class GraphNode {
 /// [fieldsOf] maps each merge-unit name to the payload fields that move under
 /// it (the schema's units plus the reserved tombstone unit). Living in exactly
 /// one place means the LWW invariant has exactly one place to be got wrong.
+///
+/// **Convergence contract.** Commutative, associative and idempotent *for
+/// well-formed input*, where well-formed means: (a) every payload field belongs
+/// to a declared merge unit (payload keys outside all units are not part of the
+/// merge — see the write-side note on [NodeSchema]); and (b) equal stamps carry
+/// equal values (a given `(hlc, origin)` identifies exactly one write). Both are
+/// checked/failed-closed where cheap; (a)'s orphan case is a documented write
+/// contract, not enforced here. A sparse unit write is a whole-unit
+/// **replacement**, not a field patch: omitting a co-unit field removes it.
 (Map<String, Object?>, Map<String, FieldStamp>) _mergeUnits({
   required Map<String, Object?> localPayload,
   required Map<String, FieldStamp> localStamps,
@@ -167,6 +183,26 @@ class GraphNode {
   for (final unit in units) {
     final localStamp = localStamps[unit];
     final remoteStamp = remoteStamps[unit];
+
+    // Equal stamps must carry equal values: a `(hlc, origin)` uniquely
+    // identifies one write, so the same stamp on both sides with a divergent
+    // payload projection is corruption (a hidden state variable), not a
+    // concurrent edit. wins() is strict, so equal stamps would otherwise
+    // silently keep local — non-commutative. Fail closed instead.
+    if (localStamp != null &&
+        remoteStamp != null &&
+        !localStamp.wins(remoteStamp) &&
+        !remoteStamp.wins(localStamp)) {
+      for (final field in fieldsOf[unit] ?? const <String>[]) {
+        if (localPayload.containsKey(field) != remotePayload.containsKey(field) ||
+            localPayload[field] != remotePayload[field]) {
+          throw StateError(
+            'equal stamps with divergent payload for unit "$unit" '
+            '(field "$field") — a stamp must identify exactly one value',
+          );
+        }
+      }
+    }
 
     // Remote wins this unit if local has no stamp, or remote's stamp beats it.
     final remoteWins =
