@@ -107,6 +107,24 @@ void main() {
       expect(restored.stamps['geometry']!.hlc, node.stamps['geometry']!.hlc);
     });
 
+    test('partial-payload unit is commutative (winner omits a co-unit field)', () {
+      // Symmetric to the edge suite: the fix lives in the shared _mergeUnits, so
+      // the node path owns a regression that would catch a future split.
+      final alice = _box(
+        payload: {'left': 1.0, 'top': 1.0, 'right': 2.0, 'bottom': 2.0},
+        stamps: {'geometry': _stamp('alice', 1)},
+      );
+      final bob = _box(
+        payload: {'left': 5.0, 'top': 5.0, 'right': 9.0}, // omits bottom
+        stamps: {'geometry': _stamp('bob', 2)}, // higher HLC wins
+      );
+      final ab = mergeNodes(alice, bob, _classBoxSchema);
+      final ba = mergeNodes(bob, alice, _classBoxSchema);
+      expect(ab.toJson(), ba.toJson());
+      expect(ab.payload.containsKey('bottom'), isFalse,
+          reason: 'winner omitted it → absent, not null');
+    });
+
     test('divergent node id fails closed at runtime (StateError, not assert)', () {
       final a = _box(payload: {'name': 'A'}, stamps: {'label': _stamp('a', 1)});
       final b = GraphNode(

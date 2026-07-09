@@ -236,6 +236,16 @@ void main() {
       expect(() => mergeEdges(resonance, asKindle, _terminusSchema), throwsStateError);
     });
 
+    test('wrong schema fails closed at runtime (schema.type != edge.type)', () {
+      final a = _edge(payload: {'voice': 'a'}, stamps: {'label': _stamp('a', 1)});
+      final b = _edge(payload: {'voice': 'b'}, stamps: {'label': _stamp('b', 2)});
+      // A schema for a different edge type — its fieldsOf lacks this edge's
+      // units, so proceeding would advance stamps without moving fields
+      // (irreversible corruption). Must throw, not assert.
+      const wrongSchema = EdgeSchema(type: 'Kindle', mergeUnits: {'label': ['voice']});
+      expect(() => mergeEdges(a, b, wrongSchema), throwsStateError);
+    });
+
     test('divergent id fails closed (the root identity key, release-critical)', () {
       final a = _edge(payload: {'voice': 'a'}, stamps: {'label': _stamp('a', 1)});
       final b = GraphEdge(

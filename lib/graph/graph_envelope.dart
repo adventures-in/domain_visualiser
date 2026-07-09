@@ -209,8 +209,16 @@ GraphNode mergeNodes(GraphNode local, GraphNode remote, NodeSchema schema) {
       '${local.type}:${local.id} vs ${remote.type}:${remote.id}',
     );
   }
-  assert(schema.type == local.type,
-      'schema.type (${schema.type}) != node.type (${local.type})');
+  // Wrong schema is not just a wrong result — it is IRREVERSIBLE corruption: a
+  // stamp whose unit is absent from `fieldsOf` advances (see [_mergeUnits]) while
+  // moving zero payload fields, separating convergence metadata from value, and
+  // a later correct-schema merge cannot repair it (stamps are now equal). So we
+  // fail closed at runtime, not just in debug.
+  if (schema.type != local.type) {
+    throw StateError(
+      'schema.type (${schema.type}) does not match node.type (${local.type})',
+    );
+  }
 
   final (payload, stamps) = _mergeUnits(
     localPayload: local.payload,
@@ -317,8 +325,8 @@ class GraphEdge {
       };
 }
 
-/// Merges two replicas of the same edge ([local].id == [remote].id) under
-/// [schema], producing the convergent result.
+/// Merges two replicas of the same edge — same identity tuple
+/// `(id, type, fromId, toId)` — under [schema], producing the convergent result.
 ///
 /// Mirrors [mergeNodes] and shares its [_mergeUnits] core — the LWW semantics
 /// are identical. The edge-specific rule: an edge's identity is the whole tuple
@@ -345,8 +353,14 @@ GraphEdge mergeEdges(GraphEdge local, GraphEdge remote, EdgeSchema schema) {
       '(a moved edge is delete+recreate, never a re-point)',
     );
   }
-  assert(schema.type == local.type,
-      'schema.type (${schema.type}) != edge.type (${local.type})');
+  // Fail closed on wrong schema — same irreversible-corruption argument as
+  // mergeNodes: a stamp for a unit absent from `fieldsOf` advances without
+  // moving its fields, and no later merge can repair it.
+  if (schema.type != local.type) {
+    throw StateError(
+      'schema.type (${schema.type}) does not match edge.type (${local.type})',
+    );
+  }
 
   final (payload, stamps) = _mergeUnits(
     localPayload: local.payload,
