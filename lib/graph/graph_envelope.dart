@@ -74,6 +74,13 @@ class FieldStamp {
 /// belong to a merge unit. The reserved unit [tombstoneUnit] carries the
 /// liveness flag so deletion LWWs against edits through the exact same path
 /// (a late edit with a higher HLC resurrects; a late delete wins — uniformly).
+///
+/// **Write-side contract** (what keeps the merge convergent — see [_mergeUnits]):
+/// every payload field a writer emits MUST belong to a declared merge unit, and
+/// a unit write carries the whole unit's field set (a sparse write is a
+/// *replacement*: an omitted co-unit field is removed on merge, not patched).
+/// Payload keys outside all units are outside the merge contract and their
+/// convergence is not guaranteed.
 class NodeSchema {
   const NodeSchema({required this.type, required this.mergeUnits});
 
@@ -141,8 +148,7 @@ class GraphNode {
       };
 }
 
-/// Merges two replicas of the same node ([local].id == [remote].id) under
-/// [schema], producing the convergent result.
+/// The shared CRDT merge core, used by both [mergeNodes] and [mergeEdges].
 ///
 /// For each merge unit present on either side, the higher-HLC stamp wins
 /// ([FieldStamp.wins]); the winning side's payload fields for that unit are
@@ -150,21 +156,53 @@ class GraphNode {
 /// out of the same loop. The operation is commutative, associative and
 /// idempotent — re-applying any change converges to the same state, which is
 /// what lets a dumb transport (Firestore, MQTT, …) deliver in any order.
-GraphNode mergeNodes(GraphNode local, GraphNode remote, NodeSchema schema) {
-  assert(local.id == remote.id, 'cannot merge distinct nodes');
-
-  final units = {...local.stamps.keys, ...remote.stamps.keys};
-  final mergedPayload = <String, Object?>{...local.payload};
-  final mergedStamps = <String, FieldStamp>{...local.stamps};
-
-  final fieldsOf = {
-    ...schema.mergeUnits,
-    NodeSchema.tombstoneUnit: const [NodeSchema.tombstoneField],
-  };
+///
+/// [fieldsOf] maps each merge-unit name to the payload fields that move under
+/// it (the schema's units plus the reserved tombstone unit). Living in exactly
+/// one place means the LWW invariant has exactly one place to be got wrong.
+///
+/// **Convergence contract.** Commutative, associative and idempotent *for
+/// well-formed input*, where well-formed means: (a) every payload field belongs
+/// to a declared merge unit (payload keys outside all units are not part of the
+/// merge — see the write-side note on [NodeSchema]); and (b) equal stamps carry
+/// equal values (a given `(hlc, origin)` identifies exactly one write). Both are
+/// checked/failed-closed where cheap; (a)'s orphan case is a documented write
+/// contract, not enforced here. A sparse unit write is a whole-unit
+/// **replacement**, not a field patch: omitting a co-unit field removes it.
+(Map<String, Object?>, Map<String, FieldStamp>) _mergeUnits({
+  required Map<String, Object?> localPayload,
+  required Map<String, FieldStamp> localStamps,
+  required Map<String, Object?> remotePayload,
+  required Map<String, FieldStamp> remoteStamps,
+  required Map<String, List<String>> fieldsOf,
+}) {
+  final units = {...localStamps.keys, ...remoteStamps.keys};
+  final mergedPayload = <String, Object?>{...localPayload};
+  final mergedStamps = <String, FieldStamp>{...localStamps};
 
   for (final unit in units) {
-    final localStamp = local.stamps[unit];
-    final remoteStamp = remote.stamps[unit];
+    final localStamp = localStamps[unit];
+    final remoteStamp = remoteStamps[unit];
+
+    // Equal stamps must carry equal values: a `(hlc, origin)` uniquely
+    // identifies one write, so the same stamp on both sides with a divergent
+    // payload projection is corruption (a hidden state variable), not a
+    // concurrent edit. wins() is strict, so equal stamps would otherwise
+    // silently keep local — non-commutative. Fail closed instead.
+    if (localStamp != null &&
+        remoteStamp != null &&
+        !localStamp.wins(remoteStamp) &&
+        !remoteStamp.wins(localStamp)) {
+      for (final field in fieldsOf[unit] ?? const <String>[]) {
+        if (localPayload.containsKey(field) != remotePayload.containsKey(field) ||
+            localPayload[field] != remotePayload[field]) {
+          throw StateError(
+            'equal stamps with divergent payload for unit "$unit" '
+            '(field "$field") — a stamp must identify exactly one value',
+          );
+        }
+      }
+    }
 
     // Remote wins this unit if local has no stamp, or remote's stamp beats it.
     final remoteWins =
@@ -172,15 +210,211 @@ GraphNode mergeNodes(GraphNode local, GraphNode remote, NodeSchema schema) {
     if (!remoteWins) continue;
 
     mergedStamps[unit] = remoteStamp;
+    // Take the WINNING side's field set for this unit — "unit taken whole".
+    // If the winner OMITS a co-unit field, the field is absent in the result
+    // (removed), never assigned an explicit null-from-absent. Otherwise
+    // merge(a,b) writes `{field: null}` while merge(b,a) leaves it absent →
+    // non-commutative for partial-payload units. Symmetric by construction:
+    // the unit's value is exactly the winner's, regardless of argument order.
     for (final field in fieldsOf[unit] ?? const <String>[]) {
-      mergedPayload[field] = remote.payload[field];
+      if (remotePayload.containsKey(field)) {
+        mergedPayload[field] = remotePayload[field];
+      } else {
+        mergedPayload.remove(field);
+      }
     }
   }
+
+  return (mergedPayload, mergedStamps);
+}
+
+/// Merges two replicas of the same node under [schema], producing the
+/// convergent result. See [_mergeUnits] for the LWW semantics; nodes contribute
+/// only their schema's units plus the tombstone.
+///
+/// A node's identity is `(id, type)` — both immutable, both wire-delivered.
+/// Two replicas that disagree on either are corruption, not concurrency, so we
+/// fail **closed** with a runtime [StateError] (not an `assert`, which is
+/// stripped in release — exactly where a dumb transport delivering in any order
+/// would first hit divergent identity). Proceeding would silently keep [local]'s
+/// identity while merging [remote]'s payload, making the merge non-commutative.
+GraphNode mergeNodes(GraphNode local, GraphNode remote, NodeSchema schema) {
+  if (local.id != remote.id || local.type != remote.type) {
+    throw StateError(
+      'cannot merge nodes with divergent identity: '
+      '${local.type}:${local.id} vs ${remote.type}:${remote.id}',
+    );
+  }
+  // Wrong schema is not just a wrong result — it is IRREVERSIBLE corruption: a
+  // stamp whose unit is absent from `fieldsOf` advances (see [_mergeUnits]) while
+  // moving zero payload fields, separating convergence metadata from value, and
+  // a later correct-schema merge cannot repair it (stamps are now equal). So we
+  // fail closed at runtime, not just in debug.
+  if (schema.type != local.type) {
+    throw StateError(
+      'schema.type (${schema.type}) does not match node.type (${local.type})',
+    );
+  }
+
+  final (payload, stamps) = _mergeUnits(
+    localPayload: local.payload,
+    localStamps: local.stamps,
+    remotePayload: remote.payload,
+    remoteStamps: remote.stamps,
+    fieldsOf: {
+      ...schema.mergeUnits,
+      NodeSchema.tombstoneUnit: const [NodeSchema.tombstoneField],
+    },
+  );
 
   return GraphNode(
     id: local.id,
     type: local.type,
-    payload: mergedPayload,
-    stamps: mergedStamps,
+    payload: payload,
+    stamps: stamps,
+  );
+}
+
+/// Declares the merge-unit grain for a [GraphEdge], exactly as [NodeSchema]
+/// does for a node.
+///
+/// Endpoints ([GraphEdge.fromId], [GraphEdge.toId]) are *identity* — like
+/// [GraphEdge.id]/[GraphEdge.type] they are immutable and never belong to a
+/// merge unit, so they are deliberately NOT declared here. Only the mutable,
+/// concurrently-editable payload has a grain.
+class EdgeSchema {
+  const EdgeSchema({required this.type, required this.mergeUnits});
+
+  /// The discriminator that selects this schema (e.g. `'Resonance'`).
+  final String type;
+
+  /// Merge-unit name → the payload field names that move together under it.
+  final Map<String, List<String>> mergeUnits;
+
+  /// Reserved tombstone unit/field — shared with nodes so deletion has exactly
+  /// one definition across the envelope (see [NodeSchema.tombstoneUnit]).
+  static const String tombstoneUnit = NodeSchema.tombstoneUnit;
+  static const String tombstoneField = NodeSchema.tombstoneField;
+}
+
+/// A directed edge in the collaborative graph — the same CRDT envelope as
+/// [GraphNode], plus two immutable endpoints.
+///
+/// [fromId]/[toId] are *identity*, exactly like [id]/[type]: never stamped,
+/// never merged. An edge does not "move" — re-pointing an endpoint is
+/// delete (tombstone) + recreate under a new [id], matching tldraw `TLBinding`
+/// semantics. [mergeEdges] fails closed (throws [StateError]) at runtime if the
+/// identity tuple diverges, so the merge core never has to reason about a
+/// concurrent endpoint change.
+class GraphEdge {
+  const GraphEdge({
+    required this.id,
+    required this.type,
+    required this.fromId,
+    required this.toId,
+    required this.payload,
+    required this.stamps,
+  });
+
+  factory GraphEdge.fromJson(Map<String, dynamic> json) => GraphEdge(
+        id: json['id'] as String,
+        type: json['type'] as String,
+        fromId: json['fromId'] as String,
+        toId: json['toId'] as String,
+        payload: Map<String, Object?>.from(json['payload'] as Map),
+        stamps: (json['stamps'] as Map).map(
+          (k, v) => MapEntry(
+            k as String,
+            FieldStamp.fromJson(Map<String, dynamic>.from(v as Map)),
+          ),
+        ),
+      );
+
+  /// Stable identity; immutable, never stamped, never merged.
+  final String id;
+
+  /// Discriminator selecting the app [EdgeSchema]; immutable.
+  final String type;
+
+  /// Source endpoint node id; immutable identity, never stamped, never merged.
+  final String fromId;
+
+  /// Target endpoint node id; immutable identity, never stamped, never merged.
+  final String toId;
+
+  /// Field name → value. Schema-agnostic: the engine never interprets these.
+  final Map<String, Object?> payload;
+
+  /// Merge-unit name → CRDT stamp.
+  final Map<String, FieldStamp> stamps;
+
+  /// True if a winning [EdgeSchema.tombstoneUnit] stamp marks this deleted.
+  bool get isDeleted => payload[EdgeSchema.tombstoneField] == true;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'type': type,
+        'fromId': fromId,
+        'toId': toId,
+        'payload': payload,
+        'stamps': stamps.map((k, v) => MapEntry(k, v.toJson())),
+      };
+}
+
+/// Merges two replicas of the same edge — same identity tuple
+/// `(id, type, fromId, toId)` — under [schema], producing the convergent result.
+///
+/// Mirrors [mergeNodes] and shares its [_mergeUnits] core — the LWW semantics
+/// are identical. The edge-specific rule: an edge's identity is the whole tuple
+/// `(id, type, fromId, toId)` — all immutable, never stamped, never merged. A
+/// "moved" edge is delete+recreate, never a re-point.
+///
+/// Two same-[GraphEdge.id] replicas that disagree on any other identity field
+/// are not a mergeable state — that is corruption, not concurrency. We fail
+/// **closed** (throw [StateError]) rather than proceed, because proceeding would
+/// silently keep [local]'s identity while merging [remote]'s payload — making
+/// the merge non-commutative (`merge(a,b)` and `merge(b,a)` would disagree on
+/// identity) and so non-convergent. Critically this is a runtime throw, NOT an
+/// `assert`: asserts are stripped in release, exactly where a dumb transport
+/// delivering in any order would first hit divergent identity.
+GraphEdge mergeEdges(GraphEdge local, GraphEdge remote, EdgeSchema schema) {
+  if (local.id != remote.id ||
+      local.type != remote.type ||
+      local.fromId != remote.fromId ||
+      local.toId != remote.toId) {
+    throw StateError(
+      'cannot merge edges with divergent identity: '
+      '${local.type}:${local.id}(${local.fromId}->${local.toId}) vs '
+      '${remote.type}:${remote.id}(${remote.fromId}->${remote.toId}) '
+      '(a moved edge is delete+recreate, never a re-point)',
+    );
+  }
+  // Fail closed on wrong schema — same irreversible-corruption argument as
+  // mergeNodes: a stamp for a unit absent from `fieldsOf` advances without
+  // moving its fields, and no later merge can repair it.
+  if (schema.type != local.type) {
+    throw StateError(
+      'schema.type (${schema.type}) does not match edge.type (${local.type})',
+    );
+  }
+
+  final (payload, stamps) = _mergeUnits(
+    localPayload: local.payload,
+    localStamps: local.stamps,
+    remotePayload: remote.payload,
+    remoteStamps: remote.stamps,
+    fieldsOf: {
+      ...schema.mergeUnits,
+      EdgeSchema.tombstoneUnit: const [EdgeSchema.tombstoneField],
+    },
+  );
+
+  return GraphEdge(
+    id: local.id,
+    type: local.type,
+    fromId: local.fromId,
+    toId: local.toId,
+    payload: payload,
+    stamps: stamps,
   );
 }
