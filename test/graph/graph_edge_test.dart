@@ -214,6 +214,53 @@ void main() {
       expect(() => mergeEdges(resonance, asKindle, _terminusSchema), throwsStateError);
     });
 
+    test('divergent id fails closed (the root identity key, release-critical)', () {
+      final a = _edge(payload: {'voice': 'a'}, stamps: {'label': _stamp('a', 1)});
+      final b = GraphEdge(
+        id: 'edge-2', // different id — distinct edges, must NOT silently merge
+        type: 'Resonance',
+        fromId: 'ember-A',
+        toId: 'ember-B',
+        payload: {'voice': 'b'},
+        stamps: {'label': _stamp('b', 2)},
+      );
+      expect(() => mergeEdges(a, b, _terminusSchema), throwsStateError);
+    });
+
+    test('divergent fromId fails closed (completes the identity tuple)', () {
+      final a = _edge(
+        payload: {'voice': 'a'},
+        stamps: {'label': _stamp('a', 1)},
+        fromId: 'ember-A',
+      );
+      final movedSource = _edge(
+        payload: {'voice': 'b'},
+        stamps: {'label': _stamp('b', 2)},
+        fromId: 'ember-Z', // same id/toId, different source
+      );
+      expect(() => mergeEdges(a, movedSource, _terminusSchema), throwsStateError);
+    });
+
+    test('concurrent tombstone vs body edit: independent units both resolve', () {
+      // Alice deletes the edge; Bob (concurrently) rewrites the body. Tombstone
+      // and body are independent units, so both writes resolve by their own HLC
+      // — deletion does not clobber the body edit, and vice versa. Order-free.
+      final alice = _edge(
+        payload: {'text': 'x', EdgeSchema.tombstoneField: true},
+        stamps: {EdgeSchema.tombstoneUnit: _stamp('alice', 2)},
+      );
+      final bob = _edge(
+        payload: {'text': 'rewritten', 'temperature': 7},
+        stamps: {'body': _stamp('bob', 1)},
+      );
+
+      final ab = mergeEdges(alice, bob, _terminusSchema);
+      final ba = mergeEdges(bob, alice, _terminusSchema);
+      expect(ab.toJson(), ba.toJson(), reason: 'independent units, order-free');
+      expect(ab.isDeleted, isTrue, reason: "Alice's delete stands");
+      expect(ab.payload['text'], 'rewritten', reason: "Bob's body edit survives");
+    });
+
     test('Resonance is an inter-ember edge (fromId/toId are distinct embers)', () {
       final resonance = GraphEdge(
         id: 'res-1',

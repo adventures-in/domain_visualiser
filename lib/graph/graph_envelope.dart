@@ -182,11 +182,25 @@ class GraphNode {
   return (mergedPayload, mergedStamps);
 }
 
-/// Merges two replicas of the same node ([local].id == [remote].id) under
-/// [schema], producing the convergent result. See [_mergeUnits] for the LWW
-/// semantics; nodes contribute only their schema's units plus the tombstone.
+/// Merges two replicas of the same node under [schema], producing the
+/// convergent result. See [_mergeUnits] for the LWW semantics; nodes contribute
+/// only their schema's units plus the tombstone.
+///
+/// A node's identity is `(id, type)` — both immutable, both wire-delivered.
+/// Two replicas that disagree on either are corruption, not concurrency, so we
+/// fail **closed** with a runtime [StateError] (not an `assert`, which is
+/// stripped in release — exactly where a dumb transport delivering in any order
+/// would first hit divergent identity). Proceeding would silently keep [local]'s
+/// identity while merging [remote]'s payload, making the merge non-commutative.
 GraphNode mergeNodes(GraphNode local, GraphNode remote, NodeSchema schema) {
-  assert(local.id == remote.id, 'cannot merge distinct nodes');
+  if (local.id != remote.id || local.type != remote.type) {
+    throw StateError(
+      'cannot merge nodes with divergent identity: '
+      '${local.type}:${local.id} vs ${remote.type}:${remote.id}',
+    );
+  }
+  assert(schema.type == local.type,
+      'schema.type (${schema.type}) != node.type (${local.type})');
 
   final (payload, stamps) = _mergeUnits(
     localPayload: local.payload,
@@ -309,17 +323,19 @@ class GraphEdge {
 /// `assert`: asserts are stripped in release, exactly where a dumb transport
 /// delivering in any order would first hit divergent identity.
 GraphEdge mergeEdges(GraphEdge local, GraphEdge remote, EdgeSchema schema) {
-  assert(local.id == remote.id, 'cannot merge distinct edges');
-  if (local.type != remote.type ||
+  if (local.id != remote.id ||
+      local.type != remote.type ||
       local.fromId != remote.fromId ||
       local.toId != remote.toId) {
     throw StateError(
       'cannot merge edges with divergent identity: '
-      '${local.type}:${local.fromId}->${local.toId} vs '
-      '${remote.type}:${remote.fromId}->${remote.toId} '
+      '${local.type}:${local.id}(${local.fromId}->${local.toId}) vs '
+      '${remote.type}:${remote.id}(${remote.fromId}->${remote.toId}) '
       '(a moved edge is delete+recreate, never a re-point)',
     );
   }
+  assert(schema.type == local.type,
+      'schema.type (${schema.type}) != edge.type (${local.type})');
 
   final (payload, stamps) = _mergeUnits(
     localPayload: local.payload,
