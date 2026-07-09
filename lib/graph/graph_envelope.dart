@@ -296,16 +296,30 @@ class GraphEdge {
 /// [schema], producing the convergent result.
 ///
 /// Mirrors [mergeNodes] and shares its [_mergeUnits] core — the LWW semantics
-/// are identical. The one edge-specific rule: endpoints are immutable identity,
-/// so merging two edges with the same [GraphEdge.id] but different endpoints is
-/// a bug (a "moved" edge is delete+recreate, never a re-point). The assert
-/// enforces it in debug/test builds.
+/// are identical. The edge-specific rule: an edge's identity is the whole tuple
+/// `(id, type, fromId, toId)` — all immutable, never stamped, never merged. A
+/// "moved" edge is delete+recreate, never a re-point.
+///
+/// Two same-[GraphEdge.id] replicas that disagree on any other identity field
+/// are not a mergeable state — that is corruption, not concurrency. We fail
+/// **closed** (throw [StateError]) rather than proceed, because proceeding would
+/// silently keep [local]'s identity while merging [remote]'s payload — making
+/// the merge non-commutative (`merge(a,b)` and `merge(b,a)` would disagree on
+/// identity) and so non-convergent. Critically this is a runtime throw, NOT an
+/// `assert`: asserts are stripped in release, exactly where a dumb transport
+/// delivering in any order would first hit divergent identity.
 GraphEdge mergeEdges(GraphEdge local, GraphEdge remote, EdgeSchema schema) {
   assert(local.id == remote.id, 'cannot merge distinct edges');
-  assert(
-    local.fromId == remote.fromId && local.toId == remote.toId,
-    'edge endpoints are immutable identity — a moved edge is delete+recreate',
-  );
+  if (local.type != remote.type ||
+      local.fromId != remote.fromId ||
+      local.toId != remote.toId) {
+    throw StateError(
+      'cannot merge edges with divergent identity: '
+      '${local.type}:${local.fromId}->${local.toId} vs '
+      '${remote.type}:${remote.fromId}->${remote.toId} '
+      '(a moved edge is delete+recreate, never a re-point)',
+    );
+  }
 
   final (payload, stamps) = _mergeUnits(
     localPayload: local.payload,

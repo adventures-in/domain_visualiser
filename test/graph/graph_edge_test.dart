@@ -75,18 +75,32 @@ void main() {
       expect(merged.payload['temperature'], 5);
     });
 
-    test('delete vs late edit: higher HLC wins through the same path', () {
+    test('late edit resurrects: higher-HLC un-delete wins through the tomb unit', () {
       final deleted = _edge(
         payload: {'text': 'x', EdgeSchema.tombstoneField: true},
-        stamps: {'__tomb__': _stamp('alice', 1)},
+        stamps: {EdgeSchema.tombstoneUnit: _stamp('alice', 1)},
       );
       final lateEdit = _edge(
         payload: {'text': 'x', EdgeSchema.tombstoneField: false},
-        stamps: {'__tomb__': _stamp('bob', 2)}, // resurrection wins (higher HLC)
+        stamps: {EdgeSchema.tombstoneUnit: _stamp('bob', 2)}, // higher HLC
       );
 
       final merged = mergeEdges(deleted, lateEdit, _terminusSchema);
       expect(merged.isDeleted, isFalse, reason: 'later un-delete resurrects');
+    });
+
+    test('late delete wins: higher-HLC tombstone beats an earlier edit (dual)', () {
+      final edit = _edge(
+        payload: {'text': 'x', EdgeSchema.tombstoneField: false},
+        stamps: {EdgeSchema.tombstoneUnit: _stamp('alice', 1)},
+      );
+      final deleted = _edge(
+        payload: {'text': 'x', EdgeSchema.tombstoneField: true},
+        stamps: {EdgeSchema.tombstoneUnit: _stamp('bob', 2)}, // higher HLC
+      );
+
+      final merged = mergeEdges(edit, deleted, _terminusSchema);
+      expect(merged.isDeleted, isTrue, reason: 'later delete wins');
     });
 
     test('merge is commutative — replicas converge regardless of order', () {
@@ -102,8 +116,38 @@ void main() {
       final ab = mergeEdges(alice, bob, _terminusSchema);
       final ba = mergeEdges(bob, alice, _terminusSchema);
 
-      expect(ab.payload['voice'], ba.payload['voice']);
+      // Full structural equality — not just one payload field. A field-only
+      // check would be BLIND to identity (endpoints/type) diverging by argument
+      // order, which is exactly the non-commutativity class we must catch.
+      expect(ab.toJson(), ba.toJson());
       expect(ab.payload['voice'], 'from-bob', reason: 'higher HLC wins both ways');
+    });
+
+    test('idempotent — merging an edge with itself is a no-op', () {
+      final edge = _edge(
+        payload: {'text': 'a', 'temperature': 3, 'voice': 'Maxwell'},
+        stamps: {'body': _stamp('a', 1), 'label': _stamp('a', 1)},
+      );
+      expect(mergeEdges(edge, edge, _terminusSchema).toJson(), edge.toJson());
+    });
+
+    test('associative — (a∘b)∘c == a∘(b∘c) across three replicas', () {
+      final a = _edge(
+        payload: {'text': 'a', 'temperature': 1, 'voice': 'A'},
+        stamps: {'body': _stamp('a', 1), 'label': _stamp('a', 1)},
+      );
+      final b = _edge(
+        payload: {'voice': 'B'},
+        stamps: {'label': _stamp('b', 2)},
+      );
+      final c = _edge(
+        payload: {'text': 'c', 'temperature': 9},
+        stamps: {'body': _stamp('c', 3)},
+      );
+
+      final left = mergeEdges(mergeEdges(a, b, _terminusSchema), c, _terminusSchema);
+      final right = mergeEdges(a, mergeEdges(b, c, _terminusSchema), _terminusSchema);
+      expect(left.toJson(), right.toJson());
     });
 
     test('endpoints survive a merge unchanged (identity, never merged)', () {
@@ -134,20 +178,40 @@ void main() {
       expect(restored.stamps['body']!.hlc, edge.stamps['body']!.hlc);
     });
 
-    test('merging edges with mismatched endpoints throws (immutable identity)', () {
+    test('divergent identity fails CLOSED at runtime (StateError, not assert)', () {
       final a = _edge(
         payload: {'voice': 'a'},
         stamps: {'label': _stamp('a', 1)},
         toId: 'ember-B',
       );
       // Same id, different target — a "moved" edge, which must be delete+recreate.
-      final moved = _edge(
+      final movedEndpoint = _edge(
         payload: {'voice': 'b'},
         stamps: {'label': _stamp('b', 2)},
         toId: 'ember-C',
       );
 
-      expect(() => mergeEdges(a, moved, _terminusSchema), throwsAssertionError);
+      // StateError (a real runtime throw), NOT throwsAssertionError — the guard
+      // must fire in release builds too, where asserts are stripped. This is the
+      // convergence invariant: divergent identity is corruption, not a merge.
+      expect(() => mergeEdges(a, movedEndpoint, _terminusSchema), throwsStateError);
+    });
+
+    test('divergent type also fails closed (whole identity tuple guarded)', () {
+      final resonance = _edge(
+        payload: {'voice': 'a'},
+        stamps: {'label': _stamp('a', 1)},
+      );
+      final asKindle = GraphEdge(
+        id: 'edge-1', // same id...
+        type: 'Kindle', // ...different type — identity divergence
+        fromId: 'ember-A',
+        toId: 'ember-B',
+        payload: {'voice': 'b'},
+        stamps: {'label': _stamp('b', 2)},
+      );
+
+      expect(() => mergeEdges(resonance, asKindle, _terminusSchema), throwsStateError);
     });
 
     test('Resonance is an inter-ember edge (fromId/toId are distinct embers)', () {
