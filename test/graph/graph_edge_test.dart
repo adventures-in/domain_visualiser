@@ -123,6 +123,28 @@ void main() {
       expect(ab.payload['voice'], 'from-bob', reason: 'higher HLC wins both ways');
     });
 
+    test('partial-payload unit is commutative (winner omits a co-unit field)', () {
+      // Alice's body has both fields; Bob's winning body write omits
+      // `temperature`. The result must be Bob's field set (text only, NO
+      // temperature: null) regardless of argument order — the null-vs-absent
+      // trap that a fully-populated test cannot see.
+      final alice = _edge(
+        payload: {'text': 'a', 'temperature': 1},
+        stamps: {'body': _stamp('alice', 1)},
+      );
+      final bob = _edge(
+        payload: {'text': 'b'}, // omits temperature
+        stamps: {'body': _stamp('bob', 2)}, // higher HLC → Bob wins
+      );
+
+      final ab = mergeEdges(alice, bob, _terminusSchema);
+      final ba = mergeEdges(bob, alice, _terminusSchema);
+      expect(ab.toJson(), ba.toJson(), reason: 'no null-from-absent asymmetry');
+      expect(ab.payload.containsKey('temperature'), isFalse,
+          reason: 'winner omitted it → absent, not null');
+      expect(ab.payload['text'], 'b');
+    });
+
     test('idempotent — merging an edge with itself is a no-op', () {
       final edge = _edge(
         payload: {'text': 'a', 'temperature': 3, 'voice': 'Maxwell'},

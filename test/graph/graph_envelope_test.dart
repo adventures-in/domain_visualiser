@@ -106,5 +106,27 @@ void main() {
       expect(restored.payload, node.payload);
       expect(restored.stamps['geometry']!.hlc, node.stamps['geometry']!.hlc);
     });
+
+    test('divergent node id fails closed at runtime (StateError, not assert)', () {
+      final a = _box(payload: {'name': 'A'}, stamps: {'label': _stamp('a', 1)});
+      final b = GraphNode(
+        id: 'box-2', // different id → distinct nodes, must not silently merge
+        type: 'ClassBox',
+        payload: {'name': 'B'},
+        stamps: {'label': _stamp('b', 2)},
+      );
+      expect(() => mergeNodes(a, b, _classBoxSchema), throwsStateError);
+    });
+
+    test('divergent node type fails closed (identity is (id, type))', () {
+      final a = _box(payload: {'name': 'A'}, stamps: {'label': _stamp('a', 1)});
+      final b = GraphNode(
+        id: 'box-1', // same id...
+        type: 'Frame', // ...different type — identity divergence
+        payload: {'name': 'B'},
+        stamps: {'label': _stamp('b', 2)},
+      );
+      expect(() => mergeNodes(a, b, _classBoxSchema), throwsStateError);
+    });
   });
 }

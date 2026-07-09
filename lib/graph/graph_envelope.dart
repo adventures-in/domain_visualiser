@@ -174,8 +174,18 @@ class GraphNode {
     if (!remoteWins) continue;
 
     mergedStamps[unit] = remoteStamp;
+    // Take the WINNING side's field set for this unit — "unit taken whole".
+    // If the winner OMITS a co-unit field, the field is absent in the result
+    // (removed), never assigned an explicit null-from-absent. Otherwise
+    // merge(a,b) writes `{field: null}` while merge(b,a) leaves it absent →
+    // non-commutative for partial-payload units. Symmetric by construction:
+    // the unit's value is exactly the winner's, regardless of argument order.
     for (final field in fieldsOf[unit] ?? const <String>[]) {
-      mergedPayload[field] = remotePayload[field];
+      if (remotePayload.containsKey(field)) {
+        mergedPayload[field] = remotePayload[field];
+      } else {
+        mergedPayload.remove(field);
+      }
     }
   }
 
@@ -249,8 +259,9 @@ class EdgeSchema {
 /// [fromId]/[toId] are *identity*, exactly like [id]/[type]: never stamped,
 /// never merged. An edge does not "move" — re-pointing an endpoint is
 /// delete (tombstone) + recreate under a new [id], matching tldraw `TLBinding`
-/// semantics. [mergeEdges] asserts the endpoints match, so the merge core never
-/// has to reason about a concurrent endpoint change.
+/// semantics. [mergeEdges] fails closed (throws [StateError]) at runtime if the
+/// identity tuple diverges, so the merge core never has to reason about a
+/// concurrent endpoint change.
 class GraphEdge {
   const GraphEdge({
     required this.id,
