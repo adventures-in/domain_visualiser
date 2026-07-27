@@ -92,10 +92,22 @@ class NodeSchema {
 
   /// Reserved merge unit holding the tombstone flag (payload key
   /// [tombstoneField], a `bool`). Present implicitly on every node.
-  static const String tombstoneUnit = '__tomb__';
+  ///
+  /// Wire-name rule (enforced by `reserved_field_names_test.dart`): every
+  /// identifier that reaches Firestore as a field name or map key must NOT
+  /// match `__.*__` — Firestore reserves those and rejects the write with 400.
+  /// Hence the single-underscore prefix here, not double.
+  static const String tombstoneUnit = '_tomb';
 
   /// Payload key under [tombstoneUnit]; `true` means deleted.
-  static const String tombstoneField = '__deleted__';
+  static const String tombstoneField = '_deleted';
+
+  /// Reserved merge unit stamped onto a legacy / envelope-less document when a
+  /// reader fabricates a single row-grain stamp for it (see
+  /// `FirestoreBackend._readGraphNodeFromDoc`). A named constant — not a bare
+  /// literal — so the reserved-name guard can assert on it and a future edit
+  /// can't reintroduce `__legacy_row__`.
+  static const String legacyRowUnit = '_legacy_row';
 }
 
 /// A node in the collaborative graph.

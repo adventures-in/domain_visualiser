@@ -23,9 +23,11 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 /// the backend of local writes so the cache stays authoritative for both
 /// origins.
 class FirestoreBackend implements GraphSyncBackend {
-  /// A map of SyncSection to database location
+  /// A map of SyncSection to database location. The classBoxes collection name
+  /// is the shared `classBoxesCollection` constant so the headless agent writer
+  /// (tool/agent_draw.dart) can't drift onto a different collection.
   static const locationOf = <SyncSection, String>{
-    SyncSection.classBoxes: 'domain-objects',
+    SyncSection.classBoxes: classBoxesCollection,
     SyncSection.profile: 'profile'
   };
 
@@ -156,7 +158,7 @@ class FirestoreBackend implements GraphSyncBackend {
       id: id,
       type: 'ClassBox',
       payload: payload,
-      stamps: {'__legacy_row__': stamp},
+      stamps: {NodeSchema.legacyRowUnit: stamp},
     );
   }
 
@@ -250,12 +252,39 @@ class FirestoreBackend implements GraphSyncBackend {
   }
 
   Map<String, dynamic> _toFirestoreDoc(GraphNode node) {
-    return <String, dynamic>{
+    final doc = <String, dynamic>{
       ...node.payload,
       envelopeKey: {
         'stamps': node.stamps.map((k, v) => MapEntry(k, v.toJson())),
       },
     };
+    // Enforce the reserved-field-name invariant at the single write door, so
+    // ANY producer (a future app schema, a tool, a test) is caught here rather
+    // than by a live 400 — the guard test only proves today's callers. `assert`
+    // fires in dev/test/CI (where every producer runs) at zero release cost; a
+    // reserved key can only be introduced by a code change, which those catch.
+    assert(_noReservedFieldNames(doc),
+        'a Firestore field name/key matches the reserved `__.*__` pattern and '
+        'would be rejected with 400 — see reserved_field_names_test.dart');
+    return doc;
+  }
+
+  static final RegExp _reservedFieldName = RegExp(r'^__.*__$');
+
+  /// Recursively verifies no field name / nested map key in [value] matches
+  /// Firestore's reserved `__.*__` pattern.
+  static bool _noReservedFieldNames(Object? value) {
+    if (value is Map) {
+      for (final entry in value.entries) {
+        if (_reservedFieldName.hasMatch(entry.key.toString())) return false;
+        if (!_noReservedFieldNames(entry.value)) return false;
+      }
+    } else if (value is List) {
+      for (final e in value) {
+        if (!_noReservedFieldNames(e)) return false;
+      }
+    }
+    return true;
   }
 
   @override

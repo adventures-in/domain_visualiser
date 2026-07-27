@@ -38,11 +38,28 @@ final NodeSchema classBoxSchema = withContainerUnits(const NodeSchema(
 ));
 
 /// Reserved key in the Firestore document holding the CRDT envelope. Keeping
-/// it under a single `__envelope__` key (rather than spraying `_geom_hlc`,
+/// it under a single `_envelope` key (rather than spraying `_geom_hlc`,
 /// `_label_hlc`, … into the doc body) means the existing `toClassBox()`
 /// extension keeps working unchanged on the payload fields, and a future
 /// non-domvis reader can ignore or strip the envelope cleanly.
-const String envelopeKey = '__envelope__';
+///
+/// Single-underscore prefix, NOT double: Firestore rejects any field name
+/// matching `__.*__` (see `reserved_field_names_test.dart`).
+///
+/// RESERVED BY CONVENTION: unlike the old `__envelope__` (which Firestore itself
+/// forbade in user data), `_envelope` is a legal field name, so nothing stops a
+/// producer from writing an unrelated map-valued `_envelope` field. No app
+/// schema may allocate `_envelope` as a payload field, and the reader treats any
+/// `_envelope` map as a CRDT envelope. Hardening the reader against a malformed
+/// one is tracked as a follow-up (defensive `FieldStamp.fromJson`).
+const String envelopeKey = '_envelope';
+
+/// The Firestore collection ClassBox nodes live in. Declared here (pure Dart) as
+/// the single source of truth so both `FirestoreBackend.locationOf` (the reader)
+/// and the headless agent writer (`tool/agent_draw.dart`, which can't import the
+/// cloud_firestore-bound backend) reference the SAME string — otherwise a rename
+/// silently splits producer and consumer onto different collections.
+const String classBoxesCollection = 'domain-objects';
 
 /// Projects a [ClassBox] into a [GraphNode] **with all merge units stamped
 /// fresh**. Use for a brand-new box (AddClassBox) where every unit is being
