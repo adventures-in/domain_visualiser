@@ -86,11 +86,13 @@ void main() {
     test('delete vs late edit: higher HLC wins through the same path', () {
       final deleted = _box(
         payload: {'name': 'X', NodeSchema.tombstoneField: true},
-        stamps: {'__tomb__': _stamp('alice', 1)},
+        stamps: {NodeSchema.tombstoneUnit: _stamp('alice', 1)},
       );
       final lateEdit = _box(
         payload: {'name': 'X-renamed', NodeSchema.tombstoneField: false},
-        stamps: {'__tomb__': _stamp('bob', 2)}, // resurrection wins (higher HLC)
+        stamps: {
+          NodeSchema.tombstoneUnit: _stamp('bob', 2)
+        }, // resurrection wins (higher HLC)
       );
 
       final merged = mergeNodes(deleted, lateEdit, _classBoxSchema);
