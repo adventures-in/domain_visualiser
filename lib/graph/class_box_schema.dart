@@ -134,6 +134,26 @@ GraphNode classBoxToGraphNodePartial({
   );
 }
 
+/// Builds a **tombstone envelope** for the box [id]: a partial update stamping
+/// ONLY the reserved tombstone unit ([NodeSchema.tombstoneUnit]) with
+/// `_deleted: true`. Because delete is just another merge unit, this rides the
+/// same read-merge-write path as any edit — a concurrent peer rename still wins
+/// on its own `label` unit while this wins on `_tomb`, and a later
+/// higher-HLC write to `_tomb` can resurrect the box. Carries no geometry/label
+/// fields, so absent units are left untouched by the merge.
+GraphNode classBoxTombstone(
+  String id, {
+  required HlcManager hlc,
+  required String origin,
+}) {
+  return GraphNode(
+    id: id,
+    type: 'ClassBox',
+    payload: {NodeSchema.tombstoneField: true},
+    stamps: {NodeSchema.tombstoneUnit: FieldStamp(hlc: hlc.issue(), origin: origin)},
+  );
+}
+
 /// Projects a merged [GraphNode] back to a [ClassBox] for the Redux store.
 ///
 /// Defensive: missing payload fields fall back to the existing [base] (if

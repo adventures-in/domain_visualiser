@@ -1,3 +1,4 @@
+import 'package:domain_visualiser/actions/domain-objects/clear_class_boxes_action.dart';
 import 'package:domain_visualiser/actions/shared/connect_data_stream_action.dart';
 import 'package:domain_visualiser/sync/sync_section.dart';
 import 'package:domain_visualiser/extensions/flutter/context_extensions.dart';
@@ -18,7 +19,8 @@ class DrawingPage extends StatelessWidget {
           child: Row(
             children: [
               TextButton(
-                onPressed: () {},
+                onPressed: () =>
+                    context.dispatch(ClearClassBoxesAction()),
                 child: Text('clear'),
               )
             ],
