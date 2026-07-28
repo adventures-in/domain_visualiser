@@ -55,3 +55,6 @@ web/index.cdn
 *.g.dart
 *.freezed.dart
 *.mocks.dart
+
+# Firebase deploy cache
+.firebase/

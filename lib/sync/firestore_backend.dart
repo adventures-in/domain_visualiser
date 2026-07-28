@@ -224,13 +224,17 @@ class FirestoreBackend implements GraphSyncBackend {
   /// merge logic itself is unchanged — [mergeNodes] is commutative — so this
   /// closes the durability hole without altering convergence semantics.
   Future<void> _writeMerged(GraphNode incoming) async {
-    // Reflect the write in the local replica immediately so the in-memory
-    // view is responsive (Firestore echo will then be a pure-echo skip).
+    // Reflect the write in the local replica immediately AND re-project so the
+    // canvas updates optimistically — the Firestore echo of our own write is
+    // suppressed (pure-local-echo / stamps-equal in _absorbRemoteSnapshot), so
+    // without this emit a local add/update/tombstone would never reach the UI.
+    // A later echo carrying a concurrent remote edit still reconciles the view.
     final localExisting = _replica[incoming.id];
     final localMerged = localExisting == null
         ? incoming
         : mergeNodes(localExisting, incoming, classBoxSchema);
     _replica[incoming.id] = localMerged;
+    _emitProjection();
 
     final ref = _firestore
         .doc('${locationOf[SyncSection.classBoxes]}/${incoming.id}');
