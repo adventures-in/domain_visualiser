@@ -10,6 +10,7 @@ import 'package:domain_visualiser/graph/graph_envelope.dart';
 import 'package:domain_visualiser/graph/hlc_manager.dart';
 import 'package:domain_visualiser/sync/graph_sync_backend.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 /// A [GraphSyncBackend] backed by Cloud Firestore.
 ///
@@ -105,7 +106,11 @@ class FirestoreBackend implements GraphSyncBackend {
       }
       final data = doc.data() as Map<String, dynamic>?;
       if (data == null) continue;
-      final incoming = _readGraphNodeFromDoc(doc.id, data);
+      // Single trust boundary for unvalidated remote input: quarantine a
+      // malformed/hostile doc (skip + breadcrumb) rather than letting it throw
+      // and drop EVERY user's canvas to ProblemPage. See _tryReadValidNode.
+      final incoming = _tryReadValidNode(doc.id, data);
+      if (incoming == null) continue;
       // Advance HLC past every observed stamp so future local issues sort
       // strictly after every remote we've heard from.
       for (final s in incoming.stamps.values) {
@@ -160,6 +165,45 @@ class FirestoreBackend implements GraphSyncBackend {
       payload: payload,
       stamps: {NodeSchema.legacyRowUnit: stamp},
     );
+  }
+
+  /// Reads and VALIDATES a remote doc into a node, or returns null to
+  /// QUARANTINE it. This is the single trust boundary for unvalidated remote
+  /// input — the whole point of agent-as-peer is accepting writes from
+  /// producers we do not control (a foreign app, a partial write, a hand-edited
+  /// console doc), so exactly one malformed doc must NOT be able to sink the
+  /// batch or DoS every user's canvas. Every failure here is a per-doc skip +
+  /// breadcrumb, never an [addProblem] (which routes the whole app to
+  /// ProblemPage — the DoS this closes). Nodes and edges both pass through here.
+  GraphNode? _tryReadValidNode(String id, Map<String, dynamic> data) {
+    try {
+      // face (d): a remote doc carrying a Firestore-reserved `__.*__` field name
+      // would 400 on our next merge-write-back — reject it at the door rather
+      // than absorb it and re-emit it through the merge fan-in.
+      if (!_noReservedFieldNames(data)) {
+        throw const FormatException('remote doc carries a reserved __.*__ field name');
+      }
+      final node = _readGraphNodeFromDoc(id, data);
+      // A stamp with a blank origin or hlc can neither order (LWW) nor
+      // echo-suppress correctly — that is corruption, not a concurrent edit.
+      for (final entry in node.stamps.entries) {
+        final s = entry.value;
+        if (s.origin.isEmpty || s.hlc.isEmpty) {
+          throw FormatException('stamp "${entry.key}" has empty origin/hlc');
+        }
+      }
+      return node;
+    } catch (error) {
+      _quarantineRemoteDoc(id, error);
+      return null;
+    }
+  }
+
+  /// Breadcrumb for a quarantined remote doc: visible for debugging but
+  /// deliberately NOT surfaced as an app Problem (that would defeat the
+  /// DoS protection this method exists to provide).
+  void _quarantineRemoteDoc(String id, Object error) {
+    debugPrint('FirestoreBackend: quarantined malformed remote doc "$id": $error');
   }
 
   bool _isPureLocalEcho(GraphNode incoming, GraphNode existing) {
