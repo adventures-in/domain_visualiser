@@ -6,6 +6,8 @@ import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/sync/sync_section.dart';
 import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
 import 'package:domain_visualiser/graph/class_box_schema.dart';
+import 'package:domain_visualiser/models/domain-objects/domain_object.dart'
+    show ClassBox;
 import 'package:domain_visualiser/graph/graph_envelope.dart';
 import 'package:domain_visualiser/graph/hlc_manager.dart';
 import 'package:domain_visualiser/sync/graph_sync_backend.dart';
@@ -184,14 +186,17 @@ class FirestoreBackend implements GraphSyncBackend {
   /// (`SyncSection.classBoxes` → `type: 'ClassBox'`); an edge sync path, when it
   /// exists, needs its own equivalent door.
   ///
-  /// The door dry-runs every downstream operation that can throw on remote
-  /// bytes, so a node that leaves here is safe to observe, merge, and project
-  /// OUTSIDE this per-doc guard (where a throw would sink the whole batch to
-  /// ProblemPage). It rejects: reserved field names; an unparseable envelope; a
-  /// stamp that cannot order (empty origin/hlc, NO stamps, or a non-empty but
-  /// UNPARSEABLE hlc — [HlcManager.observe] calls `Hlc.parse` in the absorb loop
-  /// outside this guard); and a payload that cannot project ([graphNodeToClassBox]
-  /// runs in [_emitProjection], also outside this guard).
+  /// The door validates the PRECONDITIONS the post-door steps (`_hlc.observe`,
+  /// [mergeNodes], [_emitProjection]) rely on but which run OUTSIDE this per-doc
+  /// guard, where a throw would sink the whole batch to ProblemPage. It rejects:
+  /// reserved field names; an unparseable envelope; a stamp that cannot order
+  /// (empty origin/hlc, NO stamps, or a non-empty but UNPARSEABLE hlc —
+  /// [HlcManager.observe] calls `Hlc.parse`); and a payload that cannot project
+  /// (`Hlc.parse`-valid stamps still leave a wrong-typed geometry field that
+  /// [graphNodeToClassBox] would throw on). This is not a proof that no post-door
+  /// step can ever throw — [_emitProjection] additionally fails closed per-node
+  /// as a structural backstop — but it removes every KNOWN throw source at the
+  /// door, so one bad doc is skipped, never the batch.
   GraphNode? _tryReadValidNode(String id, Map<String, dynamic> data) {
     try {
       // face (d): a remote doc carrying a Firestore-reserved `__.*__` field name
@@ -264,10 +269,20 @@ class FirestoreBackend implements GraphSyncBackend {
   }
 
   void _emitProjection() {
-    final boxes = _replica.values
-        .where((n) => !n.isDeleted)
-        .map((n) => graphNodeToClassBox(n))
-        .toIList();
+    // Per-node fail-closed: every node in _replica entered via _tryReadValidNode
+    // (which dry-runs projection) or was built locally, so a projection throw
+    // here should be unreachable. But this is a batch-wide fan-in — one throw
+    // would sink the WHOLE canvas — so make DoS-immunity STRUCTURAL rather than
+    // dependent on that invariant: a future replica-insertion path or a schema
+    // cast that grows a new tooth skips the one bad node, never the batch.
+    final boxes = _replica.values.where((n) => !n.isDeleted).expand((n) {
+      try {
+        return [graphNodeToClassBox(n)];
+      } catch (error) {
+        _quarantineRemoteDoc(n.id, error);
+        return const <ClassBox>[];
+      }
+    }).toIList();
     _eventsController.add(StoreClassBoxesAction(boxes));
   }
 
@@ -331,8 +346,14 @@ class FirestoreBackend implements GraphSyncBackend {
         final remoteNode = (remoteData == null)
             ? null
             : _tryReadValidNode(incoming.id, remoteData);
+        // No usable remote base — genuinely absent OR quarantined poison — so
+        // write the LOCAL merge (localExisting ⊔ incoming), not `incoming` alone.
+        // For a fresh create localMerged == incoming; for a self-heal over a
+        // poison doc it preserves units that lived only in localExisting, which a
+        // partial `incoming` would otherwise drop on the wire (availability +
+        // integrity, not just availability).
         final mergedForWire = remoteNode == null
-            ? incoming
+            ? localMerged
             : mergeNodes(remoteNode, incoming, classBoxSchema);
         tx.set(ref, _toFirestoreDoc(mergedForWire));
       });

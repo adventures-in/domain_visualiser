@@ -375,4 +375,77 @@ void main() {
     await probSub.cancel();
     backend.disconnect(SyncSection.classBoxes);
   });
+
+  // Round-3 cage-match (Tesla): a self-heal over a poison base must write the
+  // LOCAL merge (localExisting ⊔ incoming), not `incoming` alone — otherwise
+  // stamps/units that lived only in localExisting are dropped on the wire, and
+  // the PR's advertised self-heal silently loses data.
+  test('self-heal over a poison base preserves stamps that only localExisting had',
+      () async {
+    final shared = FakeFirebaseFirestore();
+    // A good box with BOTH a geometry and a label stamp.
+    await shared.doc('$path/y').set(agentClassBoxDoc(
+          hlc: HlcManager(nodeId: 'author'),
+          origin: 'author',
+          left: 0.0,
+          top: 0.0,
+          right: 100.0,
+          bottom: 60.0,
+          name: 'Original',
+        ));
+
+    final controller = StreamController<ReduxAction>.broadcast();
+    var problems = 0;
+    final probSub = controller.stream
+        .where((a) => a is AddProblemAction)
+        .listen((_) => problems++);
+    final backend = FirestoreBackend(
+      database: shared,
+      eventsController: controller,
+      hlc: HlcManager(nodeId: 'me'),
+      origin: 'me',
+    );
+    final projected = controller.stream
+        .where((a) => a is StoreClassBoxesAction)
+        .cast<StoreClassBoxesAction>()
+        .firstWhere((a) => a.boxes.any((b) => b.id == 'y'))
+        .timeout(const Duration(seconds: 5));
+    backend.connect(SyncSection.classBoxes);
+    await projected; // localExisting['y'] now holds {geometry, label}
+
+    // The wire doc is corrupted (foreign/partial write) — the label stamp is now
+    // trapped inside an unreadable envelope.
+    await shared.doc('$path/y').set({
+      'left': 0.0,
+      'top': 0.0,
+      'right': 10.0,
+      'bottom': 10.0,
+      envelopeKey: {
+        'stamps': {
+          'geometry': {'hlc': '2026-05-27T08:00:00.000Z-0001-x'} // no origin
+        }
+      },
+    });
+
+    // A geometry-only local update to the same id.
+    final incoming = GraphNode(
+      id: 'y',
+      type: 'ClassBox',
+      payload: const {'left': 5.0, 'top': 5.0, 'right': 55.0, 'bottom': 45.0},
+      stamps: {'geometry': FieldStamp(hlc: HlcManager(nodeId: 'me').issue(), origin: 'me')},
+    );
+    await backend.updateGraphNode(incoming);
+
+    await Future<void>.delayed(Duration.zero);
+    expect(problems, 0);
+    // The label stamp from localExisting must survive on the wire — writing
+    // `incoming` alone (pre-fix) would have left only the geometry stamp.
+    final onWire = await shared.doc('$path/y').get();
+    final stamps = (onWire.data()![envelopeKey] as Map)['stamps'] as Map;
+    expect(stamps.containsKey('label'), isTrue,
+        reason: 'self-heal must keep localExisting-only stamps (localMerged), not drop them');
+
+    await probSub.cancel();
+    backend.disconnect(SyncSection.classBoxes);
+  });
 }
