@@ -106,35 +106,48 @@ class FirestoreBackend implements GraphSyncBackend {
         if (_replica.remove(doc.id) != null) anyChange = true;
         continue;
       }
-      final data = doc.data() as Map<String, dynamic>?;
-      if (data == null) continue;
-      // Single trust boundary for unvalidated remote input: quarantine a
-      // malformed/hostile doc (skip + breadcrumb) rather than letting it throw
-      // and drop EVERY user's canvas to ProblemPage. See _tryReadValidNode.
-      final incoming = _tryReadValidNode(doc.id, data);
-      // Quarantine policy on an EXISTING id (asymmetry vs `removed` above, which
-      // strips the replica): a `modified` event that turns poison RETAINS the
-      // last-known-good replica entry rather than dropping it. A corrupt/partial
-      // overwrite is treated as availability-preserving noise, not a delete — we
-      // keep showing the last good state instead of flickering the node out.
-      // (A genuine removal still arrives as a `removed` change and does strip.)
-      if (incoming == null) continue;
-      // Advance HLC past every observed stamp so future local issues sort
-      // strictly after every remote we've heard from.
-      for (final s in incoming.stamps.values) {
-        _hlc.observe(s.hlc);
-      }
-      final existing = _replica[incoming.id];
-      if (existing == null) {
-        _replica[incoming.id] = incoming;
-        anyChange = true;
-        continue;
-      }
-      if (_isPureLocalEcho(incoming, existing)) continue;
-      final merged = mergeNodes(existing, incoming, classBoxSchema);
-      if (!_stampsEqual(merged.stamps, existing.stamps)) {
-        _replica[incoming.id] = merged;
-        anyChange = true;
+      // Per-doc fail-closed backstop over the WHOLE change body. The door
+      // (_tryReadValidNode) removes every KNOWN throw source, but the post-door
+      // steps run here in the batch loop and can still throw on remote bytes —
+      // e.g. mergeNodes fails closed (StateError) on equal stamps with a
+      // divergent payload, a shape a foreign producer can craft. A throw here
+      // would abort the snapshot mid-docChanges and route EVERY user to
+      // ProblemPage. Wrapping the body makes absorb DoS-immunity STRUCTURAL (one
+      // doc skipped, never the batch), matching _emitProjection's per-node guard,
+      // rather than depending on the invariant that nothing after the door throws.
+      try {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) continue;
+        // Single trust boundary for unvalidated remote input: quarantine a
+        // malformed/hostile doc (skip + breadcrumb) rather than letting it throw
+        // and drop EVERY user's canvas to ProblemPage. See _tryReadValidNode.
+        final incoming = _tryReadValidNode(doc.id, data);
+        // Quarantine policy on an EXISTING id (asymmetry vs `removed` above, which
+        // strips the replica): a `modified` event that turns poison RETAINS the
+        // last-known-good replica entry rather than dropping it. A corrupt/partial
+        // overwrite is treated as availability-preserving noise, not a delete — we
+        // keep showing the last good state instead of flickering the node out.
+        // (A genuine removal still arrives as a `removed` change and does strip.)
+        if (incoming == null) continue;
+        // Advance HLC past every observed stamp so future local issues sort
+        // strictly after every remote we've heard from.
+        for (final s in incoming.stamps.values) {
+          _hlc.observe(s.hlc);
+        }
+        final existing = _replica[incoming.id];
+        if (existing == null) {
+          _replica[incoming.id] = incoming;
+          anyChange = true;
+          continue;
+        }
+        if (_isPureLocalEcho(incoming, existing)) continue;
+        final merged = mergeNodes(existing, incoming, classBoxSchema);
+        if (!_stampsEqual(merged.stamps, existing.stamps)) {
+          _replica[incoming.id] = merged;
+          anyChange = true;
+        }
+      } catch (error) {
+        _quarantineRemoteDoc(doc.id, error);
       }
     }
     if (!anyChange) return;

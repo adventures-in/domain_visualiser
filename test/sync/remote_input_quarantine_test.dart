@@ -448,4 +448,58 @@ void main() {
     await probSub.cancel();
     backend.disconnect(SyncSection.classBoxes);
   });
+
+  // Round-4 cage-match (Tesla structural / Carnot #1): mergeNodes fails closed
+  // (StateError) on EQUAL stamps with a divergent payload — a shape a foreign
+  // producer can craft by replaying a stamp with a different value. That throw
+  // is in the absorb loop OUTSIDE the door, so pre-fix it aborted the batch →
+  // ProblemPage. The per-doc structural wrap must quarantine it instead.
+  test('equal-stamp-divergent-payload (mergeNodes StateError) is quarantined, not a batch DoS',
+      () async {
+    final shared = FakeFirebaseFirestore();
+    final stampHlc = HlcManager(nodeId: 'author').issue(); // one fixed, valid HLC
+
+    Map<String, Object?> docWithLeft(double left) => {
+          'left': left,
+          'top': 0.0,
+          'right': 100.0,
+          'bottom': 60.0,
+          envelopeKey: {
+            'stamps': {
+              'geometry': {'hlc': stampHlc, 'origin': 'author'} // SAME stamp both times
+            }
+          },
+        };
+
+    await shared.doc('$path/e').set(docWithLeft(5.0));
+
+    final controller = StreamController<ReduxAction>.broadcast();
+    var problems = 0;
+    final probSub = controller.stream
+        .where((a) => a is AddProblemAction)
+        .listen((_) => problems++);
+    final backend = FirestoreBackend(
+      database: shared,
+      eventsController: controller,
+      hlc: HlcManager(nodeId: 'me'),
+      origin: 'me',
+    );
+    final firstProjection = controller.stream
+        .where((a) => a is StoreClassBoxesAction)
+        .cast<StoreClassBoxesAction>()
+        .firstWhere((a) => a.boxes.any((b) => b.id == 'e'))
+        .timeout(const Duration(seconds: 5));
+    backend.connect(SyncSection.classBoxes);
+    await firstProjection; // replica['e'] = {geometry stampHlc, left 5}
+
+    // Same stamp, divergent payload — mergeNodes(existing, incoming) throws.
+    await shared.doc('$path/e').set(docWithLeft(99.0));
+
+    await Future<void>.delayed(Duration.zero);
+    expect(problems, 0,
+        reason: 'a mergeNodes StateError must be quarantined per-doc, not DoS the batch');
+
+    await probSub.cancel();
+    backend.disconnect(SyncSection.classBoxes);
+  });
 }
