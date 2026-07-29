@@ -184,13 +184,14 @@ class FirestoreBackend implements GraphSyncBackend {
   /// (`SyncSection.classBoxes` → `type: 'ClassBox'`); an edge sync path, when it
   /// exists, needs its own equivalent door.
   ///
-  /// The door is TOTAL: it rejects everything that could throw between here and
-  /// a rendered node — reserved field names, an unparseable envelope, a stamp
-  /// that cannot order (empty origin/hlc or NO stamps), AND a payload that
-  /// cannot project. If any of those slipped past, it would throw downstream —
-  /// in [_emitProjection] or the [_writeMerged] transaction — OUTSIDE this
-  /// per-doc guard, re-opening the batch-wide DoS. So a node that leaves here is
-  /// guaranteed safe to merge and to project.
+  /// The door dry-runs every downstream operation that can throw on remote
+  /// bytes, so a node that leaves here is safe to observe, merge, and project
+  /// OUTSIDE this per-doc guard (where a throw would sink the whole batch to
+  /// ProblemPage). It rejects: reserved field names; an unparseable envelope; a
+  /// stamp that cannot order (empty origin/hlc, NO stamps, or a non-empty but
+  /// UNPARSEABLE hlc — [HlcManager.observe] calls `Hlc.parse` in the absorb loop
+  /// outside this guard); and a payload that cannot project ([graphNodeToClassBox]
+  /// runs in [_emitProjection], also outside this guard).
   GraphNode? _tryReadValidNode(String id, Map<String, dynamic> data) {
     try {
       // face (d): a remote doc carrying a Firestore-reserved `__.*__` field name
@@ -212,6 +213,12 @@ class FirestoreBackend implements GraphSyncBackend {
         final s = entry.value;
         if (s.origin.isEmpty || s.hlc.isEmpty) {
           throw FormatException('stamp "${entry.key}" has empty origin/hlc');
+        }
+        // A non-empty but unparseable hlc passes the isEmpty check yet throws in
+        // _hlc.observe (Hlc.parse) back in the absorb loop, outside this guard.
+        // Dry-run the parse here so it is quarantined at the door instead.
+        if (!HlcManager.isValidHlc(s.hlc)) {
+          throw FormatException('stamp "${entry.key}" has an unparseable hlc "${s.hlc}"');
         }
       }
       // Projectability is part of the trust boundary. A stamp-valid doc whose

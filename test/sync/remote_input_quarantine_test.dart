@@ -257,4 +257,122 @@ void main() {
     await probSub.cancel();
     backend.disconnect(SyncSection.classBoxes);
   });
+
+  // Round-2 cage-match (Tesla): a non-empty but UNPARSEABLE hlc passes the
+  // isEmpty check, then throws in _hlc.observe (Hlc.parse) back in the absorb
+  // loop — OUTSIDE the per-doc guard — sinking the whole batch. The door now
+  // dry-runs the parse so it is quarantined instead.
+  test('a non-empty but unparseable hlc is quarantined (would throw in observe)',
+      () async {
+    final shared = FakeFirebaseFirestore();
+    await shared.doc('$path/good').set(agentClassBoxDoc(
+          hlc: HlcManager(nodeId: 'author'),
+          origin: 'author',
+          left: 0.0,
+          top: 0.0,
+          right: 100.0,
+          bottom: 60.0,
+          name: 'Good',
+        ));
+    await shared.doc('$path/garbagehlc').set({
+      'left': 0.0,
+      'top': 0.0,
+      'right': 10.0,
+      'bottom': 10.0,
+      envelopeKey: {
+        'stamps': {
+          'geometry': {'hlc': 'not-an-hlc', 'origin': 'author'} // non-empty garbage
+        }
+      },
+    });
+
+    final controller = StreamController<ReduxAction>.broadcast();
+    var problems = 0;
+    final probSub = controller.stream
+        .where((a) => a is AddProblemAction)
+        .listen((_) => problems++);
+    final backend = FirestoreBackend(
+      database: shared,
+      eventsController: controller,
+      hlc: HlcManager(nodeId: 'me'),
+      origin: 'me',
+    );
+    final projected = controller.stream
+        .where((a) => a is StoreClassBoxesAction)
+        .cast<StoreClassBoxesAction>()
+        .firstWhere((a) => a.boxes.any((b) => b.id == 'good'))
+        .timeout(const Duration(seconds: 5));
+    backend.connect(SyncSection.classBoxes);
+
+    final action = await projected;
+    expect(action.boxes.any((b) => b.id == 'garbagehlc'), isFalse);
+    await Future<void>.delayed(Duration.zero);
+    expect(problems, 0,
+        reason: 'an unparseable hlc must be quarantined, not DoS the canvas via observe');
+
+    await probSub.cancel();
+    backend.disconnect(SyncSection.classBoxes);
+  });
+
+  // Round-2 cage-match (Carnot): the projection dry-run must NOT misclassify a
+  // valid tombstone as poison. A tombstone's `{_deleted: true}` payload projects
+  // to all-defaults, so it passes the door. If it were quarantined, the write
+  // path would read a null base and a stale local write would RESURRECT the
+  // delete. This locks that in: the tombstone survives the door and the delete
+  // is not resurrected by an older concurrent local write.
+  test('a tombstone passes the door and is not resurrected by an older local write',
+      () async {
+    final shared = FakeFirebaseFirestore();
+    final authorHlc = HlcManager(nodeId: 'author');
+    final older = authorHlc.issue();
+    final newer = authorHlc.issue(); // strictly later than `older`
+
+    // A delete authored at `newer` sits on the wire as a tombstone.
+    await shared.doc('$path/x').set({
+      NodeSchema.tombstoneField: true,
+      envelopeKey: {
+        'stamps': {
+          NodeSchema.tombstoneUnit: {'hlc': newer, 'origin': 'author'}
+        }
+      },
+    });
+
+    final controller = StreamController<ReduxAction>.broadcast();
+    var problems = 0;
+    final probSub = controller.stream
+        .where((a) => a is AddProblemAction)
+        .listen((_) => problems++);
+    final backend = FirestoreBackend(
+      database: shared,
+      eventsController: controller,
+      hlc: HlcManager(nodeId: 'me'),
+      origin: 'me',
+    );
+
+    // A concurrent local write with an OLDER geometry stamp for the same id.
+    final local = GraphNode(
+      id: 'x',
+      type: 'ClassBox',
+      payload: const {
+        'left': 1.0,
+        'top': 1.0,
+        'right': 9.0,
+        'bottom': 9.0,
+        'name': 'Zombie',
+      },
+      stamps: {'geometry': FieldStamp(hlc: older, origin: 'me')},
+    );
+    await backend.addGraphNode(local);
+
+    await Future<void>.delayed(Duration.zero);
+    expect(problems, 0);
+    // The tombstone base passed the door (not quarantined → null), so the merge
+    // kept the delete. A resurrected write would have dropped `_deleted`.
+    final onWire = await shared.doc('$path/x').get();
+    expect(onWire.data()![NodeSchema.tombstoneField], true,
+        reason: 'a quarantined tombstone base would resurrect the delete');
+
+    await probSub.cancel();
+    backend.disconnect(SyncSection.classBoxes);
+  });
 }
