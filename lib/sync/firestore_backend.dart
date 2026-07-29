@@ -365,9 +365,24 @@ class FirestoreBackend implements GraphSyncBackend {
         // poison doc it preserves units that lived only in localExisting, which a
         // partial `incoming` would otherwise drop on the wire (availability +
         // integrity, not just availability).
-        final mergedForWire = remoteNode == null
-            ? localMerged
-            : mergeNodes(remoteNode, incoming, classBoxSchema);
+        // Structural fail-closed on the MERGE too — the sibling site of the
+        // absorb-loop wrap. A poison remote base can merge to a StateError
+        // (equal stamp / divergent payload, craftable by a producer forging our
+        // origin + replaying an hlc); that must quarantine + self-heal to our
+        // local merge, NOT fall through to the outer catch's addProblem (which
+        // would DoS the whole canvas on a local edit). Both merge sites are now
+        // per-doc fail-closed.
+        GraphNode mergedForWire;
+        if (remoteNode == null) {
+          mergedForWire = localMerged;
+        } else {
+          try {
+            mergedForWire = mergeNodes(remoteNode, incoming, classBoxSchema);
+          } catch (error) {
+            _quarantineRemoteDoc(incoming.id, error);
+            mergedForWire = localMerged;
+          }
+        }
         tx.set(ref, _toFirestoreDoc(mergedForWire));
       });
     } catch (error, trace) {

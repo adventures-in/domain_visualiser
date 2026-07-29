@@ -502,4 +502,59 @@ void main() {
     await probSub.cancel();
     backend.disconnect(SyncSection.classBoxes);
   });
+
+  // Round-5 cage-match (Tesla): the equal-stamp/divergent-payload mergeNodes
+  // throw exists on the WRITE path too — _writeMerged's transaction merges the
+  // remote base against incoming, and pre-fix a StateError there fell through to
+  // addProblem (whole-canvas DoS). The sibling structural guard must quarantine
+  // the base and self-heal to localMerged instead.
+  test('write path: an equal-stamp merge StateError quarantines + self-heals, no DoS',
+      () async {
+    final shared = FakeFirebaseFirestore();
+    // A remote base forging OUR origin ('me') with a fixed hlc, left 5.
+    final stampHlc = HlcManager(nodeId: 'me').issue();
+    await shared.doc('$path/w').set({
+      'left': 5.0,
+      'top': 0.0,
+      'right': 100.0,
+      'bottom': 60.0,
+      envelopeKey: {
+        'stamps': {
+          'geometry': {'hlc': stampHlc, 'origin': 'me'}
+        }
+      },
+    });
+
+    final controller = StreamController<ReduxAction>.broadcast();
+    var problems = 0;
+    final probSub = controller.stream
+        .where((a) => a is AddProblemAction)
+        .listen((_) => problems++);
+    final backend = FirestoreBackend(
+      database: shared,
+      eventsController: controller,
+      hlc: HlcManager(nodeId: 'me'),
+      origin: 'me',
+    );
+
+    // A local write with the SAME stamp but a DIVERGENT payload (left 99) →
+    // mergeNodes(remoteNode, incoming) throws in the transaction.
+    final incoming = GraphNode(
+      id: 'w',
+      type: 'ClassBox',
+      payload: const {'left': 99.0, 'top': 0.0, 'right': 100.0, 'bottom': 60.0},
+      stamps: {'geometry': FieldStamp(hlc: stampHlc, origin: 'me')},
+    );
+    await backend.updateGraphNode(incoming);
+
+    await Future<void>.delayed(Duration.zero);
+    expect(problems, 0,
+        reason: 'a write-path merge StateError must quarantine + self-heal, not DoS');
+    // Self-heal: our local write landed on the wire.
+    final onWire = await shared.doc('$path/w').get();
+    expect((onWire.data()!['left'] as num).toDouble(), 99.0);
+
+    await probSub.cancel();
+    backend.disconnect(SyncSection.classBoxes);
+  });
 }
