@@ -110,6 +110,12 @@ class FirestoreBackend implements GraphSyncBackend {
       // malformed/hostile doc (skip + breadcrumb) rather than letting it throw
       // and drop EVERY user's canvas to ProblemPage. See _tryReadValidNode.
       final incoming = _tryReadValidNode(doc.id, data);
+      // Quarantine policy on an EXISTING id (asymmetry vs `removed` above, which
+      // strips the replica): a `modified` event that turns poison RETAINS the
+      // last-known-good replica entry rather than dropping it. A corrupt/partial
+      // overwrite is treated as availability-preserving noise, not a delete — we
+      // keep showing the last good state instead of flickering the node out.
+      // (A genuine removal still arrives as a `removed` change and does strip.)
       if (incoming == null) continue;
       // Advance HLC past every observed stamp so future local issues sort
       // strictly after every remote we've heard from.
@@ -174,7 +180,17 @@ class FirestoreBackend implements GraphSyncBackend {
   /// console doc), so exactly one malformed doc must NOT be able to sink the
   /// batch or DoS every user's canvas. Every failure here is a per-doc skip +
   /// breadcrumb, never an [addProblem] (which routes the whole app to
-  /// ProblemPage — the DoS this closes). Nodes and edges both pass through here.
+  /// ProblemPage — the DoS this closes). This is the classBox absorb/merge path
+  /// (`SyncSection.classBoxes` → `type: 'ClassBox'`); an edge sync path, when it
+  /// exists, needs its own equivalent door.
+  ///
+  /// The door is TOTAL: it rejects everything that could throw between here and
+  /// a rendered node — reserved field names, an unparseable envelope, a stamp
+  /// that cannot order (empty origin/hlc or NO stamps), AND a payload that
+  /// cannot project. If any of those slipped past, it would throw downstream —
+  /// in [_emitProjection] or the [_writeMerged] transaction — OUTSIDE this
+  /// per-doc guard, re-opening the batch-wide DoS. So a node that leaves here is
+  /// guaranteed safe to merge and to project.
   GraphNode? _tryReadValidNode(String id, Map<String, dynamic> data) {
     try {
       // face (d): a remote doc carrying a Firestore-reserved `__.*__` field name
@@ -184,6 +200,12 @@ class FirestoreBackend implements GraphSyncBackend {
         throw const FormatException('remote doc carries a reserved __.*__ field name');
       }
       final node = _readGraphNodeFromDoc(id, data);
+      // A node with NO stamps can neither order (LWW) nor echo-suppress — that is
+      // corruption, not a concurrent edit. (Enveloped docs can carry an empty
+      // `stamps` map; legacy/envelope-less docs always fabricate one stamp.)
+      if (node.stamps.isEmpty) {
+        throw const FormatException('node has no stamps — cannot order or echo-suppress');
+      }
       // A stamp with a blank origin or hlc can neither order (LWW) nor
       // echo-suppress correctly — that is corruption, not a concurrent edit.
       for (final entry in node.stamps.entries) {
@@ -192,6 +214,13 @@ class FirestoreBackend implements GraphSyncBackend {
           throw FormatException('stamp "${entry.key}" has empty origin/hlc');
         }
       }
+      // Projectability is part of the trust boundary. A stamp-valid doc whose
+      // payload has a wrong-typed field (e.g. `left: "banana"`) parses and
+      // validates above, but `graphNodeToClassBox`'s `as num?` casts would throw
+      // in [_emitProjection] — outside this per-doc guard, DoSing the whole
+      // canvas. Dry-run the projection so an unprojectable node is quarantined
+      // at the door instead.
+      graphNodeToClassBox(node);
       return node;
     } catch (error) {
       _quarantineRemoteDoc(id, error);
@@ -286,9 +315,15 @@ class FirestoreBackend implements GraphSyncBackend {
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(ref);
         final remoteData = snap.data();
+        // A transaction read is ALSO unvalidated remote input — the SAME single
+        // trust boundary as the absorb path. If a poison on-wire doc sits at this
+        // id, a bare read would throw here → caught below → addProblem → whole-
+        // canvas DoS on any local edit to that id (the exact class this closes).
+        // Quarantine it and treat a quarantined base as "no remote base", so our
+        // validated write wins and self-heals the poison doc on the way out.
         final remoteNode = (remoteData == null)
             ? null
-            : _readGraphNodeFromDoc(incoming.id, remoteData);
+            : _tryReadValidNode(incoming.id, remoteData);
         final mergedForWire = remoteNode == null
             ? incoming
             : mergeNodes(remoteNode, incoming, classBoxSchema);
