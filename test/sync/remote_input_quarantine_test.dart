@@ -557,4 +557,62 @@ void main() {
     await probSub.cancel();
     backend.disconnect(SyncSection.classBoxes);
   });
+
+  // Face (d), flagged across rounds 4-6: a remote doc carrying a Firestore
+  // reserved `__.*__` field name must be quarantined at the door (it would 400
+  // on our next merge-write-back). Seeded via the raw map, asserting the door's
+  // _noReservedFieldNames check fires.
+  test('a doc with a reserved __.*__ field name is quarantined', () async {
+    final shared = FakeFirebaseFirestore();
+    await shared.doc('$path/good').set(agentClassBoxDoc(
+          hlc: HlcManager(nodeId: 'author'),
+          origin: 'author',
+          left: 0.0,
+          top: 0.0,
+          right: 100.0,
+          bottom: 60.0,
+          name: 'Good',
+        ));
+    await shared.doc('$path/reserved').set({
+      'left': 0.0,
+      'top': 0.0,
+      'right': 10.0,
+      'bottom': 10.0,
+      '__evil__': 'x', // reserved field-name pattern
+      envelopeKey: {
+        'stamps': {
+          'geometry': {
+            'hlc': HlcManager(nodeId: 'author').issue(),
+            'origin': 'author',
+          }
+        }
+      },
+    });
+
+    final controller = StreamController<ReduxAction>.broadcast();
+    var problems = 0;
+    final probSub = controller.stream
+        .where((a) => a is AddProblemAction)
+        .listen((_) => problems++);
+    final backend = FirestoreBackend(
+      database: shared,
+      eventsController: controller,
+      hlc: HlcManager(nodeId: 'me'),
+      origin: 'me',
+    );
+    final projected = controller.stream
+        .where((a) => a is StoreClassBoxesAction)
+        .cast<StoreClassBoxesAction>()
+        .firstWhere((a) => a.boxes.any((b) => b.id == 'good'))
+        .timeout(const Duration(seconds: 5));
+    backend.connect(SyncSection.classBoxes);
+
+    final action = await projected;
+    expect(action.boxes.any((b) => b.id == 'reserved'), isFalse);
+    await Future<void>.delayed(Duration.zero);
+    expect(problems, 0);
+
+    await probSub.cancel();
+    backend.disconnect(SyncSection.classBoxes);
+  });
 }

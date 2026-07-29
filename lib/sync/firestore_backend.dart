@@ -253,11 +253,14 @@ class FirestoreBackend implements GraphSyncBackend {
     }
   }
 
-  /// Breadcrumb for a quarantined remote doc: visible for debugging but
-  /// deliberately NOT surfaced as an app Problem (that would defeat the
-  /// DoS protection this method exists to provide).
+  /// Breadcrumb for a quarantined node: visible for debugging but deliberately
+  /// NOT surfaced as an app Problem (that would defeat the DoS protection this
+  /// method exists to provide). Called from every fail-closed site — the absorb
+  /// door/body, the write-path merge, and the projection backstop — so the
+  /// message stays source-neutral (a projection-backstop throw may be a locally
+  /// built node, not remote bytes).
   void _quarantineRemoteDoc(String id, Object error) {
-    debugPrint('FirestoreBackend: quarantined malformed remote doc "$id": $error');
+    debugPrint('FirestoreBackend: quarantined node "$id": $error');
   }
 
   bool _isPureLocalEcho(GraphNode incoming, GraphNode existing) {
