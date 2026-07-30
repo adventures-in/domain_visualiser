@@ -106,7 +106,30 @@ class ShapePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ShapePainter old) =>
-      _creatingRect != old.creatingRect || _boxes.length != old.boxes.length;
+      _creatingRect != old._creatingRect ||
+      _selectedClassBox != old._selectedClassBox ||
+      !_boxesVisuallyEqual(_boxes, old._boxes);
+
+  /// Cheap visual-equality check over the fields the painter actually draws:
+  /// position (rect) and [ClassBox.name]. A rename changes the name without
+  /// changing box count, so a length-only check would miss it and the label
+  /// would silently not repaint — this is on the agent-as-peer live-edit path.
+  static bool _boxesVisuallyEqual(List<ClassBox> a, List<ClassBox> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      final x = a[i];
+      final y = b[i];
+      if (x.name != y.name ||
+          x.left != y.left ||
+          x.top != y.top ||
+          x.right != y.right ||
+          x.bottom != y.bottom) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   void drawClassBox(Canvas canvas, ClassBox box) {
     final rect = box.rect;
@@ -124,6 +147,8 @@ class ShapePainter extends CustomPainter {
 
     // draw line in the middle
     canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
+
+    drawClassName(canvas, rect, box.name);
   }
 
   void drawSelectedClassBox(Canvas canvas, ClassBox box) {
@@ -142,6 +167,8 @@ class ShapePainter extends CustomPainter {
 
     // draw line in the middle
     canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
+
+    drawClassName(canvas, rect, box.name);
   }
 
   void drawCreatingRect(Canvas canvas, Rect rect) {
@@ -150,5 +177,40 @@ class ShapePainter extends CustomPainter {
     canvas.drawLine(rect.bottomRight, rect.topRight, _linePaint);
     canvas.drawLine(rect.topRight, rect.topLeft, _linePaint);
     canvas.drawLine(rect.topLeft, rect.bottomLeft, _linePaint);
+  }
+
+  /// Renders the class [name] in the top area of [rect], dark and bold on the
+  /// light fill. Clipped to [rect] so text never spills past the box or off
+  /// canvas (boxes can be dragged to any size, incl. very thin/small), with an
+  /// ellipsis on overflow. No-op for a null/empty name or a degenerate rect.
+  void drawClassName(Canvas canvas, Rect rect, String? name) {
+    if (name == null || name.isEmpty) return;
+
+    const padding = 6.0;
+    final maxWidth = rect.width - padding * 2;
+    final maxHeight = rect.height - padding * 2;
+    if (maxWidth <= 0 || maxHeight <= 0) return;
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: name,
+        style: TextStyle(
+          color: Colors.grey[900],
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          height: 1.2,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 2,
+      ellipsis: '…',
+    )..layout(maxWidth: maxWidth);
+
+    // Clip to the box so an oversized label (or a tiny box) can never draw
+    // outside its own rect.
+    canvas.save();
+    canvas.clipRect(rect);
+    textPainter.paint(canvas, rect.topLeft + const Offset(padding, padding));
+    canvas.restore();
   }
 }
