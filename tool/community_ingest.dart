@@ -113,11 +113,17 @@ Future<void> main(List<String> args) async {
       if (await createIfAbsent(client, target, box.id, doc)) {
         created++;
       } else {
-        // Raced: doc now exists — re-read and update its label only.
+        // Raced: doc existed at create-time — re-read and update its label only.
         final now = await read(client, target, box.id);
         if (now != null) {
           await _writeLabelUpdate(client, target, hlc, box.id, box.name, now);
           updated++;
+        } else {
+          // 409-then-404: a concurrent delete raced between the failed create and
+          // this re-read. Don't silently undercount — surface it. Harmless: the
+          // node is idempotently re-created on the next poll.
+          stderr.writeln('  WARN ${box.id}: create precondition failed but doc '
+              'then absent (concurrent delete?) — skipped, will re-create next poll');
         }
       }
     } else {
