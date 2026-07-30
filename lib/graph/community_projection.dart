@@ -65,6 +65,12 @@ class GhContributor {
   bool get isHuman => type == GhContributorType.user;
 }
 
+/// The kind of node a [CommunityBox] projects. A closed set — an enum, not a
+/// `bool isPerson`, so a future third kind arrives as a compile-time change
+/// rather than another boolean flag (this stepping stone reuses `ClassBox` for
+/// both; proper Person/Repo types are a tracked increment).
+enum CommunityBoxKind { person, repo }
+
 /// A projected canvas box (Person or Repo), carrying its seed geometry.
 ///
 /// [id] is the immutable, source-prefixed node id (ADR-0003 Decision 3):
@@ -79,7 +85,7 @@ class CommunityBox {
     required this.top,
     required this.right,
     required this.bottom,
-    required this.isPerson,
+    required this.kind,
     required this.commits,
   });
 
@@ -89,7 +95,9 @@ class CommunityBox {
   final double top;
   final double right;
   final double bottom;
-  final bool isPerson;
+  final CommunityBoxKind kind;
+
+  bool get isPerson => kind == CommunityBoxKind.person;
 
   /// Total commits (persons only; 0 for repos). Encoded as box size at CREATE
   /// time — see [CommunityProjection] v1 note.
@@ -106,8 +114,10 @@ class CommunityProjection {
   final List<CommunityBox> boxes;
   final List<String> capNotes;
 
-  Iterable<CommunityBox> get people => boxes.where((b) => b.isPerson);
-  Iterable<CommunityBox> get repos => boxes.where((b) => !b.isPerson);
+  Iterable<CommunityBox> get people =>
+      boxes.where((b) => b.kind == CommunityBoxKind.person);
+  Iterable<CommunityBox> get repos =>
+      boxes.where((b) => b.kind == CommunityBoxKind.repo);
 }
 
 // --- layout + sizing constants (deterministic, non-overlapping) --------------
@@ -197,30 +207,26 @@ CommunityProjection projectCommunity({
   }
   botsSkipped = botIds.length;
   if (botsSkipped > 0) {
-    capNotes.add('skipped $botsSkipped bot contributor(s) [type==Bot] — real '
+    // `!isHuman` covers `bot` AND the defensive `other`; GitHub returns only
+    // User|Bot in practice, so "non-human (bots)" is accurate and honest — an
+    // unexpected `other` is counted here, never silently dropped.
+    capNotes.add('skipped $botsSkipped non-human contributor(s) (bots) — real '
         'nodes deferred to the proper-types renderer');
   }
 
-  // Guard: if the readable-node budget is ever blown, cap persons by commit
-  // count (keep the biggest contributors) and log it — never silently truncate.
-  var personIds = includedPersonIds.toList()..sort();
+  // Readability is achieved by the exclusions above (fork + solo + bot), which
+  // take this org from ~60 candidates to ~16 — all logged. We deliberately do
+  // NOT truncate the person set to a numeric budget: dropping a real community
+  // member is the silent-truncation the task forbids, and (until the tombstone
+  // GC increment lands) a dropped person's already-written canvas node would
+  // orphan anyway. So if the readable target is ever exceeded, WARN loudly and
+  // still draw everyone — never cut.
+  final personIds = includedPersonIds.toList()..sort();
   final repoCount = included.length;
   if (repoCount + personIds.length > maxNodes) {
-    final budget = math.max(0, maxNodes - repoCount);
-    personIds.sort((a, b) => (personTotals[b] ?? 0).compareTo(personTotals[a] ?? 0));
-    final dropped = personIds.length - budget;
-    personIds = personIds.take(budget).toList()..sort();
-    // Repos are never dropped (they are the collaboration hubs), so when they
-    // alone meet/exceed the budget the node count STAYS above maxNodes — say so
-    // honestly rather than claiming a bound the result doesn't satisfy.
-    if (budget == 0) {
-      capNotes.add('CAPPED all $dropped person(s): the $repoCount included repos '
-          'alone reach the $maxNodes-node budget — node count is $repoCount '
-          '(repos are the hubs and are never dropped, only people are)');
-    } else {
-      capNotes.add('CAPPED $dropped lower-commit person(s) to keep node count '
-          '<= $maxNodes (kept the $budget highest-commit contributors)');
-    }
+    capNotes.add('NOTE node count ${repoCount + personIds.length} exceeds the '
+        'readable target of $maxNodes — drawing all (never truncating a real '
+        'member); tighten inclusion or add tombstone GC if the canvas gets busy');
   }
 
   // 3. Lay out repos in a top band, people in a band below. Flow-wrap each band
@@ -244,7 +250,7 @@ CommunityProjection projectCommunity({
       top: y,
       right: x + _repoW,
       bottom: y + _repoH,
-      isPerson: false,
+      kind: CommunityBoxKind.repo,
       commits: 0,
     ));
     x += _repoW + _gap;
@@ -270,7 +276,7 @@ CommunityProjection projectCommunity({
       top: py,
       right: px + side,
       bottom: py + side,
-      isPerson: true,
+      kind: CommunityBoxKind.person,
       commits: commits,
     ));
     px += side + _gap;

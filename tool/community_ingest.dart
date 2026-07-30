@@ -132,6 +132,26 @@ Future<void> main(List<String> args) async {
     }
   }
 
+  // Readback: GET every projected id so the run PROVES the intended set landed
+  // (verify, don't assert — the same discipline agent_draw uses).
+  var present = 0;
+  for (final box in projection.boxes) {
+    if (await read(client, target, box.id) != null) present++;
+  }
+  stdout.writeln('\nreadback: $present/${projection.boxes.length} projected '
+      'nodes present in ${target.label}.');
+  if (present != projection.boxes.length) {
+    stderr.writeln('  WARN readback short — some nodes did not land; a re-run '
+        'will idempotently reconcile.');
+  }
+
+  // KNOWN LIMITATION (tracked: issue #17) — this ingest enforces PRESENCE but not
+  // ABSENCE. A node whose GitHub basis disappears (repo drops below 2 humans, a
+  // person leaves) is never tombstoned, so a stale gh-* box lingers. ADR-0003
+  // Decision 2 (sot_symmetric_deletion) wants that tombstoned; it is a separate
+  // increment (enumerate live gh-* docs, diff against the projection, tombstone
+  // the absent). v1-acceptable: this org's node set only grows in practice.
+
   stdout.writeln('\ndone — $created created, $updated updated on ${target.label}.');
   client.close();
 }
