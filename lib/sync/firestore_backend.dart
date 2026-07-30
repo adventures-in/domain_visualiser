@@ -6,10 +6,13 @@ import 'package:domain_visualiser/actions/redux_action.dart';
 import 'package:domain_visualiser/sync/sync_section.dart';
 import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
 import 'package:domain_visualiser/graph/class_box_schema.dart';
+import 'package:domain_visualiser/models/domain-objects/domain_object.dart'
+    show ClassBox;
 import 'package:domain_visualiser/graph/graph_envelope.dart';
 import 'package:domain_visualiser/graph/hlc_manager.dart';
 import 'package:domain_visualiser/sync/graph_sync_backend.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 /// A [GraphSyncBackend] backed by Cloud Firestore.
 ///
@@ -103,25 +106,48 @@ class FirestoreBackend implements GraphSyncBackend {
         if (_replica.remove(doc.id) != null) anyChange = true;
         continue;
       }
-      final data = doc.data() as Map<String, dynamic>?;
-      if (data == null) continue;
-      final incoming = _readGraphNodeFromDoc(doc.id, data);
-      // Advance HLC past every observed stamp so future local issues sort
-      // strictly after every remote we've heard from.
-      for (final s in incoming.stamps.values) {
-        _hlc.observe(s.hlc);
-      }
-      final existing = _replica[incoming.id];
-      if (existing == null) {
-        _replica[incoming.id] = incoming;
-        anyChange = true;
-        continue;
-      }
-      if (_isPureLocalEcho(incoming, existing)) continue;
-      final merged = mergeNodes(existing, incoming, classBoxSchema);
-      if (!_stampsEqual(merged.stamps, existing.stamps)) {
-        _replica[incoming.id] = merged;
-        anyChange = true;
+      // Per-doc fail-closed backstop over the WHOLE change body. The door
+      // (_tryReadValidNode) removes every KNOWN throw source, but the post-door
+      // steps run here in the batch loop and can still throw on remote bytes —
+      // e.g. mergeNodes fails closed (StateError) on equal stamps with a
+      // divergent payload, a shape a foreign producer can craft. A throw here
+      // would abort the snapshot mid-docChanges and route EVERY user to
+      // ProblemPage. Wrapping the body makes absorb DoS-immunity STRUCTURAL (one
+      // doc skipped, never the batch), matching _emitProjection's per-node guard,
+      // rather than depending on the invariant that nothing after the door throws.
+      try {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) continue;
+        // Single trust boundary for unvalidated remote input: quarantine a
+        // malformed/hostile doc (skip + breadcrumb) rather than letting it throw
+        // and drop EVERY user's canvas to ProblemPage. See _tryReadValidNode.
+        final incoming = _tryReadValidNode(doc.id, data);
+        // Quarantine policy on an EXISTING id (asymmetry vs `removed` above, which
+        // strips the replica): a `modified` event that turns poison RETAINS the
+        // last-known-good replica entry rather than dropping it. A corrupt/partial
+        // overwrite is treated as availability-preserving noise, not a delete — we
+        // keep showing the last good state instead of flickering the node out.
+        // (A genuine removal still arrives as a `removed` change and does strip.)
+        if (incoming == null) continue;
+        // Advance HLC past every observed stamp so future local issues sort
+        // strictly after every remote we've heard from.
+        for (final s in incoming.stamps.values) {
+          _hlc.observe(s.hlc);
+        }
+        final existing = _replica[incoming.id];
+        if (existing == null) {
+          _replica[incoming.id] = incoming;
+          anyChange = true;
+          continue;
+        }
+        if (_isPureLocalEcho(incoming, existing)) continue;
+        final merged = mergeNodes(existing, incoming, classBoxSchema);
+        if (!_stampsEqual(merged.stamps, existing.stamps)) {
+          _replica[incoming.id] = merged;
+          anyChange = true;
+        }
+      } catch (error) {
+        _quarantineRemoteDoc(doc.id, error);
       }
     }
     if (!anyChange) return;
@@ -162,6 +188,81 @@ class FirestoreBackend implements GraphSyncBackend {
     );
   }
 
+  /// Reads and VALIDATES a remote doc into a node, or returns null to
+  /// QUARANTINE it. This is the single trust boundary for unvalidated remote
+  /// input — the whole point of agent-as-peer is accepting writes from
+  /// producers we do not control (a foreign app, a partial write, a hand-edited
+  /// console doc), so exactly one malformed doc must NOT be able to sink the
+  /// batch or DoS every user's canvas. Every failure here is a per-doc skip +
+  /// breadcrumb, never an [addProblem] (which routes the whole app to
+  /// ProblemPage — the DoS this closes). This is the classBox absorb/merge path
+  /// (`SyncSection.classBoxes` → `type: 'ClassBox'`); an edge sync path, when it
+  /// exists, needs its own equivalent door.
+  ///
+  /// The door validates the PRECONDITIONS the post-door steps (`_hlc.observe`,
+  /// [mergeNodes], [_emitProjection]) rely on but which run OUTSIDE this per-doc
+  /// guard, where a throw would sink the whole batch to ProblemPage. It rejects:
+  /// reserved field names; an unparseable envelope; a stamp that cannot order
+  /// (empty origin/hlc, NO stamps, or a non-empty but UNPARSEABLE hlc —
+  /// [HlcManager.observe] calls `Hlc.parse`); and a payload that cannot project
+  /// (`Hlc.parse`-valid stamps still leave a wrong-typed geometry field that
+  /// [graphNodeToClassBox] would throw on). This is not a proof that no post-door
+  /// step can ever throw — [_emitProjection] additionally fails closed per-node
+  /// as a structural backstop — but it removes every KNOWN throw source at the
+  /// door, so one bad doc is skipped, never the batch.
+  GraphNode? _tryReadValidNode(String id, Map<String, dynamic> data) {
+    try {
+      // face (d): a remote doc carrying a Firestore-reserved `__.*__` field name
+      // would 400 on our next merge-write-back — reject it at the door rather
+      // than absorb it and re-emit it through the merge fan-in.
+      if (!_noReservedFieldNames(data)) {
+        throw const FormatException('remote doc carries a reserved __.*__ field name');
+      }
+      final node = _readGraphNodeFromDoc(id, data);
+      // A node with NO stamps can neither order (LWW) nor echo-suppress — that is
+      // corruption, not a concurrent edit. (Enveloped docs can carry an empty
+      // `stamps` map; legacy/envelope-less docs always fabricate one stamp.)
+      if (node.stamps.isEmpty) {
+        throw const FormatException('node has no stamps — cannot order or echo-suppress');
+      }
+      // A stamp with a blank origin or hlc can neither order (LWW) nor
+      // echo-suppress correctly — that is corruption, not a concurrent edit.
+      for (final entry in node.stamps.entries) {
+        final s = entry.value;
+        if (s.origin.isEmpty || s.hlc.isEmpty) {
+          throw FormatException('stamp "${entry.key}" has empty origin/hlc');
+        }
+        // A non-empty but unparseable hlc passes the isEmpty check yet throws in
+        // _hlc.observe (Hlc.parse) back in the absorb loop, outside this guard.
+        // Dry-run the parse here so it is quarantined at the door instead.
+        if (!HlcManager.isValidHlc(s.hlc)) {
+          throw FormatException('stamp "${entry.key}" has an unparseable hlc "${s.hlc}"');
+        }
+      }
+      // Projectability is part of the trust boundary. A stamp-valid doc whose
+      // payload has a wrong-typed field (e.g. `left: "banana"`) parses and
+      // validates above, but `graphNodeToClassBox`'s `as num?` casts would throw
+      // in [_emitProjection] — outside this per-doc guard, DoSing the whole
+      // canvas. Dry-run the projection so an unprojectable node is quarantined
+      // at the door instead.
+      graphNodeToClassBox(node);
+      return node;
+    } catch (error) {
+      _quarantineRemoteDoc(id, error);
+      return null;
+    }
+  }
+
+  /// Breadcrumb for a quarantined node: visible for debugging but deliberately
+  /// NOT surfaced as an app Problem (that would defeat the DoS protection this
+  /// method exists to provide). Called from every fail-closed site — the absorb
+  /// door/body, the write-path merge, and the projection backstop — so the
+  /// message stays source-neutral (a projection-backstop throw may be a locally
+  /// built node, not remote bytes).
+  void _quarantineRemoteDoc(String id, Object error) {
+    debugPrint('FirestoreBackend: quarantined node "$id": $error');
+  }
+
   bool _isPureLocalEcho(GraphNode incoming, GraphNode existing) {
     if (incoming.stamps.length != existing.stamps.length) return false;
     for (final entry in incoming.stamps.entries) {
@@ -184,10 +285,20 @@ class FirestoreBackend implements GraphSyncBackend {
   }
 
   void _emitProjection() {
-    final boxes = _replica.values
-        .where((n) => !n.isDeleted)
-        .map((n) => graphNodeToClassBox(n))
-        .toIList();
+    // Per-node fail-closed: every node in _replica entered via _tryReadValidNode
+    // (which dry-runs projection) or was built locally, so a projection throw
+    // here should be unreachable. But this is a batch-wide fan-in — one throw
+    // would sink the WHOLE canvas — so make DoS-immunity STRUCTURAL rather than
+    // dependent on that invariant: a future replica-insertion path or a schema
+    // cast that grows a new tooth skips the one bad node, never the batch.
+    final boxes = _replica.values.where((n) => !n.isDeleted).expand((n) {
+      try {
+        return [graphNodeToClassBox(n)];
+      } catch (error) {
+        _quarantineRemoteDoc(n.id, error);
+        return const <ClassBox>[];
+      }
+    }).toIList();
     _eventsController.add(StoreClassBoxesAction(boxes));
   }
 
@@ -242,12 +353,39 @@ class FirestoreBackend implements GraphSyncBackend {
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(ref);
         final remoteData = snap.data();
+        // A transaction read is ALSO unvalidated remote input — the SAME single
+        // trust boundary as the absorb path. If a poison on-wire doc sits at this
+        // id, a bare read would throw here → caught below → addProblem → whole-
+        // canvas DoS on any local edit to that id (the exact class this closes).
+        // Quarantine it and treat a quarantined base as "no remote base", so our
+        // validated write wins and self-heals the poison doc on the way out.
         final remoteNode = (remoteData == null)
             ? null
-            : _readGraphNodeFromDoc(incoming.id, remoteData);
-        final mergedForWire = remoteNode == null
-            ? incoming
-            : mergeNodes(remoteNode, incoming, classBoxSchema);
+            : _tryReadValidNode(incoming.id, remoteData);
+        // No usable remote base — genuinely absent OR quarantined poison — so
+        // write the LOCAL merge (localExisting ⊔ incoming), not `incoming` alone.
+        // For a fresh create localMerged == incoming; for a self-heal over a
+        // poison doc it preserves units that lived only in localExisting, which a
+        // partial `incoming` would otherwise drop on the wire (availability +
+        // integrity, not just availability).
+        // Structural fail-closed on the MERGE too — the sibling site of the
+        // absorb-loop wrap. A poison remote base can merge to a StateError
+        // (equal stamp / divergent payload, craftable by a producer forging our
+        // origin + replaying an hlc); that must quarantine + self-heal to our
+        // local merge, NOT fall through to the outer catch's addProblem (which
+        // would DoS the whole canvas on a local edit). Both merge sites are now
+        // per-doc fail-closed.
+        GraphNode mergedForWire;
+        if (remoteNode == null) {
+          mergedForWire = localMerged;
+        } else {
+          try {
+            mergedForWire = mergeNodes(remoteNode, incoming, classBoxSchema);
+          } catch (error) {
+            _quarantineRemoteDoc(incoming.id, error);
+            mergedForWire = localMerged;
+          }
+        }
         tx.set(ref, _toFirestoreDoc(mergedForWire));
       });
     } catch (error, trace) {

@@ -35,6 +35,22 @@ class HlcManager {
     return _last.toString();
   }
 
+  /// True if [candidate] is a well-formed HLC that [observe] can parse.
+  ///
+  /// The remote-input trust boundary uses this to quarantine a doc whose stamp
+  /// carries a non-empty but UNPARSEABLE hlc BEFORE it reaches [observe] —
+  /// which calls `Hlc.parse` in the absorb loop OUTSIDE any per-doc guard, so a
+  /// throw there would sink the whole snapshot batch to ProblemPage. Non-empty
+  /// is not enough; parseable is the real precondition for ordering.
+  static bool isValidHlc(HlcString candidate) {
+    try {
+      Hlc.parse(candidate);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Advances the local clock past [remote] without issuing a new stamp.
   /// Call this for every remote HLC the app observes so the next [issue] sorts
   /// strictly after everyone we've heard from.
