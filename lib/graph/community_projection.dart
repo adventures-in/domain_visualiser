@@ -32,6 +32,23 @@ class GhRepo {
   final bool fork;
 }
 
+/// The GitHub account kind for a contributor. A closed set at the source
+/// (`GET /repos/.../contributors` returns `"User"` or `"Bot"`), so it is an
+/// enum, not a raw `String` — a typo like `'uesr'` can't compile. [other] is a
+/// defensive catch-all for an unexpected future value so parsing never throws.
+enum GhContributorType {
+  user,
+  bot,
+  other;
+
+  /// Maps the GitHub API `type` string onto the enum. Unknown → [other].
+  static GhContributorType fromApi(String raw) => switch (raw) {
+        'User' => user,
+        'Bot' => bot,
+        _ => other,
+      };
+}
+
 /// A GitHub contributor record for one repo (from `/repos/{o}/{r}/contributors`).
 class GhContributor {
   const GhContributor({
@@ -42,10 +59,10 @@ class GhContributor {
   });
   final String login;
   final int id;
-  final String type; // "User" | "Bot"
+  final GhContributorType type;
   final int contributions;
 
-  bool get isHuman => type == 'User';
+  bool get isHuman => type == GhContributorType.user;
 }
 
 /// A projected canvas box (Person or Repo), carrying its seed geometry.
@@ -193,8 +210,17 @@ CommunityProjection projectCommunity({
     personIds.sort((a, b) => (personTotals[b] ?? 0).compareTo(personTotals[a] ?? 0));
     final dropped = personIds.length - budget;
     personIds = personIds.take(budget).toList()..sort();
-    capNotes.add('CAPPED $dropped lower-commit person(s) to keep node count '
-        '<= $maxNodes (kept the $budget highest-commit contributors)');
+    // Repos are never dropped (they are the collaboration hubs), so when they
+    // alone meet/exceed the budget the node count STAYS above maxNodes — say so
+    // honestly rather than claiming a bound the result doesn't satisfy.
+    if (budget == 0) {
+      capNotes.add('CAPPED all $dropped person(s): the $repoCount included repos '
+          'alone reach the $maxNodes-node budget — node count is $repoCount '
+          '(repos are the hubs and are never dropped, only people are)');
+    } else {
+      capNotes.add('CAPPED $dropped lower-commit person(s) to keep node count '
+          '<= $maxNodes (kept the $budget highest-commit contributors)');
+    }
   }
 
   // 3. Lay out repos in a top band, people in a band below. Flow-wrap each band

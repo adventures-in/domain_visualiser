@@ -25,7 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
         .map((c) => GhContributor(
               login: c['login'] as String,
               id: (c['id'] as num).toInt(),
-              type: c['type'] as String,
+              type: GhContributorType.fromApi(c['type'] as String),
               contributions: (c['contributions'] as num).toInt(),
             ))
         .toList();

@@ -164,15 +164,19 @@ Future<List<GhRepo>> _fetchRepos() async {
 }
 
 Future<List<GhContributor>> _fetchContributors(String repo) async {
-  // A repo with zero commits returns 204 (empty) — gh exits 0 with no body, so
-  // _ghJsonl yields []. A truly missing repo would exit non-zero and throw.
+  // Empty result = a genuinely-empty repo (204) OR a transient 202 while GitHub
+  // computes contributor stats on a cold repo — both yield []. That transiently
+  // models the repo as 0-contributors, so it may be excluded this poll. This is
+  // eventual, NOT data loss: the ingest is idempotent and re-runs (Decision 2),
+  // so on the next poll the warm endpoint returns real data and the missing
+  // nodes get CREATEd then. A truly missing repo would exit non-zero and throw.
   final rows = await _ghJsonl('repos/$_org/$repo/contributors?per_page=100',
       '.[] | {login,id,type,contributions}');
   return rows
       .map((m) => GhContributor(
             login: m['login'] as String,
             id: (m['id'] as num).toInt(),
-            type: m['type'] as String,
+            type: GhContributorType.fromApi(m['type'] as String),
             contributions: (m['contributions'] as num).toInt(),
           ))
       .toList();

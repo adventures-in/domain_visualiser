@@ -27,8 +27,16 @@ void main() {
       repos: const [GhRepo(name: 'chat_app', id: 100, fork: false)],
       contributorsByRepo: const {
         'chat_app': [
-          GhContributor(login: 'nickmeinhold', id: 1, type: 'User', contributions: 40),
-          GhContributor(login: 'Jei', id: 2, type: 'User', contributions: 19),
+          GhContributor(
+              login: 'nickmeinhold',
+              id: 1,
+              type: GhContributorType.user,
+              contributions: 40),
+          GhContributor(
+              login: 'Jei',
+              id: 2,
+              type: GhContributorType.user,
+              contributions: 19),
         ],
       },
     );
