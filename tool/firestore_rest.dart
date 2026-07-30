@@ -158,11 +158,21 @@ Future<bool> createIfAbsent(HttpClient client, FirestoreTarget target, String id
 /// needed. The mask semantics (masked leaves replaced, siblings preserved) are
 /// documented at
 /// https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/patch
-Future<void> patchMasked(HttpClient client, FirestoreTarget target, String id,
+/// Requires `currentDocument.exists=true` so a masked PATCH is a pure UPDATE and
+/// can NEVER create a partial document. A bare masked PATCH on an ABSENT doc
+/// (deleted/cleared between the caller's read and this write) would otherwise
+/// create a `gh-*` row carrying only the masked leaves (`name` + label stamp) and
+/// NO geometry — a canvas corpse the renderer can't place. With the precondition
+/// the write fails closed on 404/412 and returns false; the caller skips (the
+/// next poll re-creates it fully via [createIfAbsent]). Symmetric with
+/// [createIfAbsent]: both writers go through an existence-precondition door, so
+/// neither can invent a malformed row.
+Future<bool> patchMasked(HttpClient client, FirestoreTarget target, String id,
     Map<String, Object?> doc, List<String> fieldPaths) async {
   final fields = doc.map((k, v) => MapEntry(k, fsValue(v)));
   final uri = target.docUri(id).replace(queryParameters: {
     'updateMask.fieldPaths': fieldPaths,
+    'currentDocument.exists': 'true',
   });
   final req = await client.patchUrl(uri);
   req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.bearer}');
@@ -170,11 +180,17 @@ Future<void> patchMasked(HttpClient client, FirestoreTarget target, String id,
   req.add(utf8.encode(jsonEncode({'fields': fields})));
   final resp = await req.close();
   final body = await resp.transform(utf8.decoder).join();
+  if (resp.statusCode == 404 || resp.statusCode == 412) {
+    stdout.writeln('  vanished  $collection/$id  (${resp.statusCode}) — '
+        'skipping update; next poll will re-create');
+    return false;
+  }
   if (resp.statusCode >= 300) {
     throw StateError('PATCH(mask) $id -> ${resp.statusCode}: $body');
   }
   stdout.writeln('  updated  $collection/$id  (${resp.statusCode}) '
       'mask=[${fieldPaths.join(", ")}]');
+  return true;
 }
 
 /// GETs a document; returns null on 404, throws on other non-2xx.

@@ -91,7 +91,7 @@ Future<void> main(List<String> args) async {
 
   // 3. Write each box, create-vs-update so human geometry is never clobbered.
   stdout.writeln('\nwriting → ${target.label}…');
-  var created = 0, updated = 0;
+  var created = 0, updated = 0, unchanged = 0;
   for (final box in projection.boxes) {
     final existing = await read(client, target, box.id);
     if (existing == null) {
@@ -116,8 +116,11 @@ Future<void> main(List<String> args) async {
         // Raced: doc existed at create-time — re-read and update its label only.
         final now = await read(client, target, box.id);
         if (now != null) {
-          await _writeLabelUpdate(client, target, hlc, box.id, box.name, now);
-          updated++;
+          if (await _writeLabelUpdate(client, target, hlc, box.id, box.name, now)) {
+            updated++;
+          } else {
+            unchanged++;
+          }
         } else {
           // 409-then-404: a concurrent delete raced between the failed create and
           // this re-read. Don't silently undercount — surface it. Harmless: the
@@ -127,8 +130,11 @@ Future<void> main(List<String> args) async {
         }
       }
     } else {
-      await _writeLabelUpdate(client, target, hlc, box.id, box.name, existing);
-      updated++;
+      if (await _writeLabelUpdate(client, target, hlc, box.id, box.name, existing)) {
+        updated++;
+      } else {
+        unchanged++;
+      }
     }
   }
 
@@ -152,23 +158,46 @@ Future<void> main(List<String> args) async {
   // increment (enumerate live gh-* docs, diff against the projection, tombstone
   // the absent). v1-acceptable: this org's node set only grows in practice.
 
-  stdout.writeln('\ndone — $created created, $updated updated on ${target.label}.');
+  stdout.writeln('\ndone — $created created, $updated updated, $unchanged '
+      'unchanged (no-op) on ${target.label}.');
   client.close();
 }
 
-/// UPDATE the agent-owned `label` unit only. Observes the existing doc's stamps
-/// so the new label stamp sorts strictly after them, then masked-PATCHes just
-/// `name` + `_envelope.stamps.label`. Geometry (payload + stamp) is omitted, so a
-/// human's drag/resize survives. Shared by the exists-branch and the create-race
-/// fallback so both go through the one non-clobbering door.
-Future<void> _writeLabelUpdate(HttpClient client, FirestoreTarget target,
+/// UPDATE the agent-owned `label` unit only, IF it actually changed. Returns true
+/// if a write was issued, false if skipped (a genuine no-op or the doc vanished).
+///
+/// IDEMPOTENT SNAPSHOTS (ADR-0003 Decision 2): replaying the same GitHub facts
+/// must be a no-op. So when the existing doc already carries this name AND its
+/// label stamp is already ours (`agent-github`), we write NOTHING — bumping the
+/// HLC every poll would dirty the envelope and make every subscribed canvas
+/// re-project 16 boxes for zero fact change (a continuous re-render feed). We
+/// still re-write when the name changed OR the label stamp is missing/foreign (a
+/// fact to (re)assert). Observes the existing stamps first so a real write sorts
+/// strictly after them; the masked PATCH omits geometry, so a human drag/resize
+/// survives, and its existence-precondition means it can never create a partial
+/// doc if the row vanished mid-flight.
+Future<bool> _writeLabelUpdate(HttpClient client, FirestoreTarget target,
     HlcManager hlc, String id, String name,
     Map<String, Object?> existing) async {
+  final fields = existing['fields'] as Map?;
+  final currentName = (fields?['name'] as Map?)?['stringValue'];
+  final labelOrigin = _labelStampOrigin(existing);
+  if (currentName == name && labelOrigin == _origin) {
+    return false; // no-op: facts unchanged and we already own the label
+  }
   for (final h in _stampHlcs(existing)) {
     if (HlcManager.isValidHlc(h)) hlc.observe(h);
   }
   final update = agentLabelUpdateDoc(hlc: hlc, origin: _origin, name: name);
-  await patchMasked(client, target, id, update.doc, update.fieldPaths);
+  return patchMasked(client, target, id, update.doc, update.fieldPaths);
+}
+
+/// The origin of the `label` stamp on a read doc (Firestore REST shape), or null.
+String? _labelStampOrigin(Map<String, Object?> doc) {
+  final env = _mapVal((doc['fields'] as Map?)?[envelopeKey]);
+  final stamps = _mapVal(env?['stamps']);
+  final label = _mapVal(stamps?['label']);
+  return (label?['origin'] as Map?)?['stringValue'] as String?;
 }
 
 // --- GitHub via gh (facts source) --------------------------------------------
