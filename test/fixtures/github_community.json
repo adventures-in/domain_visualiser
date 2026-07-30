@@ -1,0 +1,28 @@
+{
+  "_comment": "Fixed capture shaped after the real adventures-in org (gh api). Exercises every projection branch: fork exclusion (dart-pad), <2-human exclusion (podcustard), bot skip (dependabot[bot]), cross-repo commit aggregation, and cut-vertex sizing (nick). NOT fetched at test time — no network in tests.",
+  "repos": [
+    { "name": "chat_app", "id": 100, "fork": false },
+    { "name": "tech-world", "id": 101, "fork": false },
+    { "name": "podcustard", "id": 102, "fork": false },
+    { "name": "dart-pad", "id": 103, "fork": true }
+  ],
+  "contributors": {
+    "chat_app": [
+      { "login": "nickmeinhold", "id": 1, "type": "User", "contributions": 40 },
+      { "login": "Jei", "id": 2, "type": "User", "contributions": 19 },
+      { "login": "dependabot[bot]", "id": 99, "type": "Bot", "contributions": 3 }
+    ],
+    "tech-world": [
+      { "login": "nickmeinhold", "id": 1, "type": "User", "contributions": 29 },
+      { "login": "pendashteh", "id": 3, "type": "User", "contributions": 1 },
+      { "login": "dependabot[bot]", "id": 99, "type": "Bot", "contributions": 3 }
+    ],
+    "podcustard": [
+      { "login": "nickmeinhold", "id": 1, "type": "User", "contributions": 10 }
+    ],
+    "dart-pad": [
+      { "login": "nickmeinhold", "id": 1, "type": "User", "contributions": 5 },
+      { "login": "some-googler", "id": 50, "type": "User", "contributions": 100 }
+    ]
+  }
+}

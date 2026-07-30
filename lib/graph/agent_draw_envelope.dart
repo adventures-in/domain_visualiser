@@ -65,3 +65,33 @@ Map<String, Object?> agentClassBoxDoc({
     envelopeKey: <String, Object?>{'stamps': stamps},
   };
 }
+
+/// Builds the **masked-UPDATE** wire doc + Firestore `updateMask.fieldPaths` for
+/// a re-runnable agent peer (`tool/community_ingest.dart`) that re-writes ONLY
+/// the agent-owned `label` unit (a Person's login / a Repo's name) on each poll.
+///
+/// The crux of not clobbering a human's edit: geometry (`left/top/right/bottom`
+/// AND `_envelope.stamps.geometry`) is human-owned (ADR-0003 authority
+/// partition) and is DELIBERATELY ABSENT from both [doc] and [fieldPaths], so a
+/// human's drag/resize survives every re-ingest. The returned [fieldPaths] must
+/// be passed as the Firestore `updateMask` so only these leaves are written and
+/// every unmasked field (the human's geometry) is preserved.
+///
+/// [fieldPaths] uses Firestore field-path dot syntax; `_envelope`, `stamps` and
+/// `label` each match `[A-Za-z_][A-Za-z0-9_]*`, so no backtick-quoting is needed.
+({Map<String, Object?> doc, List<String> fieldPaths}) agentLabelUpdateDoc({
+  required HlcManager hlc,
+  required String origin,
+  required String name,
+}) {
+  final labelStamp = FieldStamp(hlc: hlc.issue(), origin: origin).toJson();
+  return (
+    doc: <String, Object?>{
+      'name': name,
+      envelopeKey: <String, Object?>{
+        'stamps': <String, Object?>{'label': labelStamp},
+      },
+    },
+    fieldPaths: <String>['name', '$envelopeKey.stamps.label'],
+  );
+}

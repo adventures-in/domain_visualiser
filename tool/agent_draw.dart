@@ -10,9 +10,13 @@
 // bytes through the production `FirestoreBackend`. This tool's job is only to
 // make the bytes appear live on a canvas.
 //
+// For a RE-RUNNABLE peer that does NOT clobber human edits (create-vs-update
+// with an updateMask), see `tool/community_ingest.dart`.
+//
 // It reuses the production HLC (`package:crdt` via [HlcManager]) and the single
 // wire-bytes producer ([agentClassBoxDoc]) — the same map the acceptance test
-// consumes — then REST-encodes it to Firestore.
+// consumes — then REST-encodes it to Firestore via the shared machinery in
+// `tool/firestore_rest.dart`.
 //
 // TWO TARGETS:
 //   dart run tool/agent_draw.dart            # local Firestore emulator (default)
@@ -35,69 +39,14 @@
 //
 // Pure Dart + `dart:io` only (no `http` dep, no Flutter engine).
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:domain_visualiser/graph/agent_draw_envelope.dart';
-import 'package:domain_visualiser/graph/class_box_schema.dart' show classBoxesCollection;
 import 'package:domain_visualiser/graph/hlc_manager.dart';
 
-const String _projectId = 'domain-visualiser-app';
-// 127.0.0.1, not 'localhost': the emulator JAR binds IPv4 only, and on stacks
-// where 'localhost' resolves to ::1 first the write would hit a dead address
-// while the canvas (which uses 127.0.0.1) reads fine — a silent one-sided split.
-const String _host = '127.0.0.1';
-const int _port = 8080;
+import 'firestore_rest.dart';
+
 const String _origin = 'agent-claude';
-// The gcloud account that OWNS domain-visualiser-app (its owner OAuth token is
-// what bypasses security rules on the --live REST path).
-const String _liveAccount = 'nick.meinhold@gmail.com';
-// Shared with FirestoreBackend.locationOf via the one pure-Dart constant, so the
-// writer and the canvas can never drift onto different collections (Wu's catch).
-const String _collection = classBoxesCollection;
-
-/// Where the agent writes and how it authenticates. Both targets speak the same
-/// Firestore REST document API; only the base URL and bearer differ.
-class _Target {
-  _Target({required this.base, required this.bearer, required this.label});
-
-  /// `.../databases/(default)/documents` — the collection/id is appended.
-  final String base;
-  final String bearer;
-  final String label;
-
-  Uri docUri(String id) => Uri.parse('$base/$_collection/$id');
-}
-
-Future<_Target> _resolveTarget(List<String> args) async {
-  if (!args.contains('--live')) {
-    return _Target(
-      base:
-          'http://$_host:$_port/v1/projects/$_projectId/databases/(default)/documents',
-      bearer: 'owner', // emulator admin token
-      label: 'emulator $_host:$_port',
-    );
-  }
-  final token = await _gcloudAccessToken(_liveAccount);
-  return _Target(
-    base:
-        'https://firestore.googleapis.com/v1/projects/$_projectId/databases/(default)/documents',
-    bearer: token,
-    label: 'LIVE firestore.googleapis.com/$_projectId',
-  );
-}
-
-/// Owner OAuth access token via gcloud. Fetched through [Process] (never argv
-/// or env) so the short-lived token stays out of the process table and logs.
-Future<String> _gcloudAccessToken(String account) async {
-  final r = await Process.run(
-      'gcloud', ['auth', 'print-access-token', '--account', account]);
-  if (r.exitCode != 0) {
-    throw StateError(
-        'gcloud print-access-token failed for $account: ${r.stderr}');
-  }
-  return (r.stdout as String).trim();
-}
 
 /// A tiny domain: Order aggregates LineItems, each LineItem points at a Product,
 /// an Order belongs to a Customer. Laid out as a 2x2 grid the canvas can render.
@@ -132,66 +81,14 @@ const List<Map<String, Object?>> _diagram = [
   },
 ];
 
-/// Recursively encodes a plain Dart value into a Firestore REST `Value`.
-/// https://firebase.google.com/docs/firestore/reference/rest/v1/Value
-Map<String, Object?> _fsValue(Object? v) {
-  if (v == null) return {'nullValue': null};
-  if (v is bool) return {'booleanValue': v};
-  if (v is int) return {'integerValue': v.toString()};
-  if (v is double) return {'doubleValue': v};
-  if (v is String) return {'stringValue': v};
-  if (v is List) {
-    return {
-      'arrayValue': {'values': v.map(_fsValue).toList()}
-    };
-  }
-  if (v is Map) {
-    return {
-      'mapValue': {
-        'fields': v.map((k, val) => MapEntry(k.toString(), _fsValue(val)))
-      }
-    };
-  }
-  throw ArgumentError('unencodable value: $v (${v.runtimeType})');
-}
-
-/// Upserts one document against [target].
-Future<void> _patch(
-    HttpClient client, _Target target, String id, Map<String, Object?> doc) async {
-  final fields = doc.map((k, v) => MapEntry(k, _fsValue(v)));
-  final req = await client.patchUrl(target.docUri(id));
-  req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.bearer}');
-  req.headers.contentType = ContentType.json;
-  req.add(utf8.encode(jsonEncode({'fields': fields})));
-  final resp = await req.close();
-  final body = await resp.transform(utf8.decoder).join();
-  if (resp.statusCode >= 300) {
-    throw StateError('PATCH $id -> ${resp.statusCode}: $body');
-  }
-  stdout.writeln('  drew  $_collection/$id  (${resp.statusCode})');
-}
-
-Future<Map<String, Object?>?> _read(
-    HttpClient client, _Target target, String id) async {
-  final req = await client.getUrl(target.docUri(id));
-  req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.bearer}');
-  final resp = await req.close();
-  final body = await resp.transform(utf8.decoder).join();
-  if (resp.statusCode == 404) return null;
-  if (resp.statusCode >= 300) {
-    throw StateError('GET $id -> ${resp.statusCode}: $body');
-  }
-  return jsonDecode(body) as Map<String, Object?>;
-}
-
 Future<void> main(List<String> args) async {
-  final target = await _resolveTarget(args);
+  final target = await resolveTarget(args);
   final hlc = HlcManager(nodeId: _origin);
   final client = HttpClient();
 
   // Preflight: fail fast with a clear message if the target isn't reachable.
   try {
-    await _read(client, target, 'preflight-probe');
+    await read(client, target, 'preflight-probe');
   } on SocketException {
     stderr.writeln('Cannot reach ${target.label}.\n'
         'Emulator: start it first (see this file\'s header).');
@@ -200,7 +97,8 @@ Future<void> main(List<String> args) async {
     return;
   }
 
-  stdout.writeln('agent "$_origin" drawing ${_diagram.length} boxes → ${target.label}…');
+  stdout.writeln(
+      'agent "$_origin" drawing ${_diagram.length} boxes → ${target.label}…');
   for (final b in _diagram) {
     final x = b['x'] as double;
     final y = b['y'] as double;
@@ -218,14 +116,14 @@ Future<void> main(List<String> args) async {
       instanceMethods: (b['methods'] as List).cast<String>(),
       userId: _origin,
     );
-    await _patch(client, target, b['id'] as String, doc);
+    await patch(client, target, b['id'] as String, doc);
   }
 
   // Read every box back so the run proves the bytes landed in the shared store
   // (verify, don't assert).
   stdout.writeln('\nreadback from the shared store:');
   for (final b in _diagram) {
-    final doc = await _read(client, target, b['id'] as String);
+    final doc = await read(client, target, b['id'] as String);
     final f = doc?['fields'] as Map?;
     String num(String k) =>
         ((f?[k] as Map?)?['doubleValue'] ?? (f?[k] as Map?)?['integerValue'])
