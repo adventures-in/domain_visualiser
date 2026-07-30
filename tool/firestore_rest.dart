@@ -110,6 +110,43 @@ Future<void> patch(HttpClient client, FirestoreTarget target, String id,
   stdout.writeln('  drew  $collection/$id  (${resp.statusCode})');
 }
 
+/// Atomic CREATE against [target]: writes [doc] ONLY if the document does not
+/// already exist (Firestore REST `currentDocument.exists=false` precondition).
+/// Returns true on create; false if the doc already exists (precondition failed,
+/// HTTP 409/412) so the caller can fall back to a masked update instead of a
+/// full-document PATCH that would clobber a human's geometry. Throws on any other
+/// non-2xx.
+///
+/// This removes the read-then-write race in a re-runnable poller: a doc that
+/// appears between a caller's 404-read and this create (an overlapping poll, or a
+/// human dragging a just-created node) can no longer be overwritten — the create
+/// fails closed and the caller updates instead. Kills the coupling rather than
+/// reasoning about who else writes the id.
+/// https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/patch
+Future<bool> createIfAbsent(HttpClient client, FirestoreTarget target, String id,
+    Map<String, Object?> doc) async {
+  final fields = doc.map((k, v) => MapEntry(k, fsValue(v)));
+  final uri = target.docUri(id).replace(queryParameters: {
+    'currentDocument.exists': 'false',
+  });
+  final req = await client.patchUrl(uri);
+  req.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${target.bearer}');
+  req.headers.contentType = ContentType.json;
+  req.add(utf8.encode(jsonEncode({'fields': fields})));
+  final resp = await req.close();
+  final body = await resp.transform(utf8.decoder).join();
+  if (resp.statusCode == 409 || resp.statusCode == 412) {
+    stdout.writeln('  exists  $collection/$id  (${resp.statusCode}) — '
+        'falling back to masked update');
+    return false;
+  }
+  if (resp.statusCode >= 300) {
+    throw StateError('CREATE $id -> ${resp.statusCode}: $body');
+  }
+  stdout.writeln('  drew  $collection/$id  (${resp.statusCode})');
+  return true;
+}
+
 /// Masked PATCH against [target]: only the field paths in [fieldPaths] are
 /// written; every other field on the existing doc is left untouched. This is the
 /// UPDATE path — it must cover ONLY agent-owned fields (`name` + its stamp) so a

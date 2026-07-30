@@ -95,7 +95,11 @@ Future<void> main(List<String> args) async {
   for (final box in projection.boxes) {
     final existing = await read(client, target, box.id);
     if (existing == null) {
-      // CREATE: full envelope, agent stamps geometry (seed) + label.
+      // CREATE: full envelope, agent stamps geometry (seed) + label. ATOMIC via
+      // currentDocument.exists=false — if the doc appeared between the read above
+      // and now (an overlapping poll, or a human dragging a just-created node),
+      // the create fails closed and we fall back to a masked update rather than
+      // full-PATCH-clobbering the human's geometry.
       final doc = agentClassBoxDoc(
         hlc: hlc,
         origin: _origin,
@@ -106,26 +110,39 @@ Future<void> main(List<String> args) async {
         name: box.name,
         userId: _origin,
       );
-      await patch(client, target, box.id, doc);
-      created++;
-    } else {
-      // UPDATE: agent owns the `label` unit only. Observe existing stamps so the
-      // new label stamp sorts strictly after them, then masked-PATCH just
-      // `name` + `_envelope.stamps.label`. Geometry (payload + stamp) is omitted
-      // → a human's drag/resize survives.
-      for (final h in _stampHlcs(existing)) {
-        if (HlcManager.isValidHlc(h)) hlc.observe(h);
+      if (await createIfAbsent(client, target, box.id, doc)) {
+        created++;
+      } else {
+        // Raced: doc now exists — re-read and update its label only.
+        final now = await read(client, target, box.id);
+        if (now != null) {
+          await _writeLabelUpdate(client, target, hlc, box.id, box.name, now);
+          updated++;
+        }
       }
-      final update =
-          agentLabelUpdateDoc(hlc: hlc, origin: _origin, name: box.name);
-      await patchMasked(
-          client, target, box.id, update.doc, update.fieldPaths);
+    } else {
+      await _writeLabelUpdate(client, target, hlc, box.id, box.name, existing);
       updated++;
     }
   }
 
   stdout.writeln('\ndone — $created created, $updated updated on ${target.label}.');
   client.close();
+}
+
+/// UPDATE the agent-owned `label` unit only. Observes the existing doc's stamps
+/// so the new label stamp sorts strictly after them, then masked-PATCHes just
+/// `name` + `_envelope.stamps.label`. Geometry (payload + stamp) is omitted, so a
+/// human's drag/resize survives. Shared by the exists-branch and the create-race
+/// fallback so both go through the one non-clobbering door.
+Future<void> _writeLabelUpdate(HttpClient client, FirestoreTarget target,
+    HlcManager hlc, String id, String name,
+    Map<String, Object?> existing) async {
+  for (final h in _stampHlcs(existing)) {
+    if (HlcManager.isValidHlc(h)) hlc.observe(h);
+  }
+  final update = agentLabelUpdateDoc(hlc: hlc, origin: _origin, name: name);
+  await patchMasked(client, target, id, update.doc, update.fieldPaths);
 }
 
 // --- GitHub via gh (facts source) --------------------------------------------
