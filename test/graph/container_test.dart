@@ -1,8 +1,8 @@
-import 'package:domain_visualiser/graph/class_box_schema.dart' as cbs;
-import 'package:domain_visualiser/graph/container_schema.dart';
-import 'package:domain_visualiser/graph/fractional_index.dart';
-import 'package:domain_visualiser/graph/graph_envelope.dart';
-import 'package:domain_visualiser/graph/hierarchy.dart';
+import 'package:codraw/graph/class_box_schema.dart' as cbs;
+import 'package:codraw/graph/container_schema.dart';
+import 'package:codraw/graph/fractional_index.dart';
+import 'package:codraw/graph/graph_envelope.dart';
+import 'package:codraw/graph/hierarchy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// A minimal schema with no app-level units — `withContainerUnits` layers on

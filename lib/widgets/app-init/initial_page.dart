@@ -1,9 +1,9 @@
-import 'package:domain_visualiser/enums/auth/auth_step_enum.dart';
-import 'package:domain_visualiser/models/app-state/app_state.dart';
-import 'package:domain_visualiser/models/auth/auth_user_data.dart';
-import 'package:domain_visualiser/widgets/auth/auth_page.dart';
-import 'package:domain_visualiser/widgets/drawing/drawing_page.dart';
-import 'package:domain_visualiser/widgets/shared/waiting_indicator.dart';
+import 'package:codraw/enums/auth/auth_step_enum.dart';
+import 'package:codraw/models/app-state/app_state.dart';
+import 'package:codraw/models/auth/auth_user_data.dart';
+import 'package:codraw/widgets/auth/auth_page.dart';
+import 'package:codraw/widgets/drawing/drawing_page.dart';
+import 'package:codraw/widgets/shared/waiting_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_redux/flutter_redux.dart';
 

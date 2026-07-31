@@ -1,16 +1,16 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart' as firestore;
-import 'package:domain_visualiser/graph/hlc_manager.dart';
-import 'package:domain_visualiser/graph/origin_client_id.dart';
-import 'package:domain_visualiser/middleware/app_middleware.dart';
-import 'package:domain_visualiser/models/app-state/app_state.dart';
-import 'package:domain_visualiser/reducers/app_reducer.dart';
-import 'package:domain_visualiser/services/auth_service.dart';
-import 'package:domain_visualiser/services/platform_service.dart';
-import 'package:domain_visualiser/sync/firestore_backend.dart';
-import 'package:domain_visualiser/sync/graph_sync_backend.dart';
-import 'package:domain_visualiser/utils/store_operation.dart';
+import 'package:codraw/graph/hlc_manager.dart';
+import 'package:codraw/graph/origin_client_id.dart';
+import 'package:codraw/middleware/app_middleware.dart';
+import 'package:codraw/models/app-state/app_state.dart';
+import 'package:codraw/reducers/app_reducer.dart';
+import 'package:codraw/services/auth_service.dart';
+import 'package:codraw/services/platform_service.dart';
+import 'package:codraw/sync/firestore_backend.dart';
+import 'package:codraw/sync/graph_sync_backend.dart';
+import 'package:codraw/utils/store_operation.dart';
 import 'package:redux/redux.dart';
 
 /// Services can be injected, or if missing are given default values

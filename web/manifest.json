@@ -1,6 +1,6 @@
 {
-    "name": "domain_visualiser",
-    "short_name": "domain_visualiser",
+    "name": "codraw",
+    "short_name": "codraw",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

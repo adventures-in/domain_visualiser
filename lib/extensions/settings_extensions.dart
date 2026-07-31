@@ -1,6 +1,6 @@
-import 'package:domain_visualiser/enums/settings/brightness_mode_enum.dart';
-import 'package:domain_visualiser/enums/settings/theme_brightness_enum.dart';
-import 'package:domain_visualiser/models/settings/theme_set.dart';
+import 'package:codraw/enums/settings/brightness_mode_enum.dart';
+import 'package:codraw/enums/settings/theme_brightness_enum.dart';
+import 'package:codraw/models/settings/theme_set.dart';
 import 'package:flutter/material.dart';
 
 // Static functions must be called on the extension name, ie. NewThemeData

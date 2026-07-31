@@ -1,6 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:domain_visualiser/converters/ilist_converters.dart';
+import 'package:codraw/converters/ilist_converters.dart';
 
 part 'domain_object.freezed.dart';
 part 'domain_object.g.dart';

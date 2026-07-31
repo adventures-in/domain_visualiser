@@ -1,6 +1,6 @@
-import 'package:domain_visualiser/enums/platform/platform_enum.dart';
-import 'package:domain_visualiser/services/wrappers/platform_wrapper.dart';
-import 'package:domain_visualiser/services/wrappers/url_launcher_wrapper.dart';
+import 'package:codraw/enums/platform/platform_enum.dart';
+import 'package:codraw/services/wrappers/platform_wrapper.dart';
+import 'package:codraw/services/wrappers/url_launcher_wrapper.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class PlatformService {

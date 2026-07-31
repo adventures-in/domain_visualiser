@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/actions/domain-objects/store_class_boxes_action.dart';
-import 'package:domain_visualiser/models/app-state/app_state.dart';
+import 'package:codraw/actions/domain-objects/store_class_boxes_action.dart';
+import 'package:codraw/models/app-state/app_state.dart';
 import 'package:redux/redux.dart';
 
 class StoreClassBoxesReducer

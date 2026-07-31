@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
-import 'package:domain_visualiser/widgets/drawing/drawing_canvas.dart';
+import 'package:codraw/models/domain-objects/domain_object.dart';
+import 'package:codraw/widgets/drawing/drawing_canvas.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

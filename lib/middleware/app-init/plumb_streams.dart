@@ -1,8 +1,8 @@
-import 'package:domain_visualiser/actions/app-init/plumb_streams_action.dart';
-import 'package:domain_visualiser/extensions/redux/store_extensions.dart';
-import 'package:domain_visualiser/models/app-state/app_state.dart';
-import 'package:domain_visualiser/services/auth_service.dart';
-import 'package:domain_visualiser/sync/graph_sync_backend.dart';
+import 'package:codraw/actions/app-init/plumb_streams_action.dart';
+import 'package:codraw/extensions/redux/store_extensions.dart';
+import 'package:codraw/models/app-state/app_state.dart';
+import 'package:codraw/services/auth_service.dart';
+import 'package:codraw/sync/graph_sync_backend.dart';
 import 'package:redux/redux.dart';
 
 class PlumbStreamsMiddleware

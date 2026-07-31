@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/models/app-state/app_state.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/models/app-state/app_state.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_redux/flutter_redux.dart';
 

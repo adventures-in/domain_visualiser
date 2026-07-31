@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/sync/sync_section.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/sync/sync_section.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'connect_data_stream_action.freezed.dart';

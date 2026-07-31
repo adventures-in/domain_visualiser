@@ -1,4 +1,4 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
+import 'package:codraw/actions/redux_action.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'remove_current_page_action.freezed.dart';

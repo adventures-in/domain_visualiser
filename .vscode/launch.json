@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "domain_visualiser",
+      "name": "codraw",
       "request": "launch",
       "type": "dart"
     },

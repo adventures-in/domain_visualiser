@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:domain_visualiser/actions/profile/store_profile_action.dart';
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/sync/sync_section.dart';
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
-import 'package:domain_visualiser/models/profile/profile_data.dart';
+import 'package:codraw/actions/profile/store_profile_action.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/sync/sync_section.dart';
+import 'package:codraw/models/domain-objects/domain_object.dart';
+import 'package:codraw/models/profile/profile_data.dart';
 
 extension ConvertDocumentSnapshot on DocumentSnapshot {
   ProfileData toProfileData() {

@@ -1,4 +1,4 @@
-import 'package:domain_visualiser/widgets/auth/auth_page_buttons/stretchable_button.dart';
+import 'package:codraw/widgets/auth/auth_page_buttons/stretchable_button.dart';
 import 'package:flutter/material.dart';
 
 const double defaultBorderRadius = 3.0;

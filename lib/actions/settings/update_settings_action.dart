@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/enums/platform/platform_enum.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/enums/platform/platform_enum.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'update_settings_action.freezed.dart';

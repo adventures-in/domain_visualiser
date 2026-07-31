@@ -13,7 +13,7 @@ named the shared substrate:
 
 | Builder | Project | Layer | Speaks |
 |---|---|---|---|
-| Nick | **domain_visualiser** | collaborative canvas | `{id, left, top, right, bottom, name, …methods}` |
+| Nick | **codraw** | collaborative canvas | `{id, left, top, right, bottom, name, …methods}` |
 | Nick | **Engram** | KG learning app (shipped CRDT) | `concept / relationship / quizItem` welded to FSRS |
 | Andy Gelme | **Aiko** | transport / pipeline graphs over MQTT | `"(PE_0 (PE_1 (PE_3 PE_5)))"` |
 | Angie Simmons | **SignalKG** | causal / Bayesian layer | sensor-fusion KG |
@@ -49,7 +49,7 @@ The envelope is `GraphNode { id, type, payload: Map, stamps: Map<unit,FieldStamp
 The CRDT metadata is the hard part, and "per-field LWW" is the wrong default —
 it is **simultaneously too coarse and too fine**:
 
-- **Too fine** for geometry. domain_visualiser's `left/top/right/bottom` must
+- **Too fine** for geometry. codraw's `left/top/right/bottom` must
   move as *one* unit. If two users drag the same box and each field LWWs
   independently, replicas can take Alice's `left` and Bob's `right` — a **torn
   box** that exists on no one's screen.
@@ -59,7 +59,7 @@ it is **simultaneously too coarse and too fine**:
   both survive. Row-level LWW would silently drop one.
 
 So the unit of last-writer-wins is an **app-declared grouping of fields** — a
-*merge unit*. domain_visualiser's `ClassBox` declares: `geometry` =
+*merge unit*. codraw's `ClassBox` declares: `geometry` =
 {left,top,right,bottom}, `label` = {name}, and one unit per method/variable
 list. The engine honours the declaration; it never guesses the grain.
 
@@ -90,7 +90,7 @@ no special-casing. Elegant, and it means `mergeNodes` is a single uniform pass.
 
 ## Sequencing (locked — rule of three)
 
-This envelope is implemented **inside domain_visualiser** as the *2nd*
+This envelope is implemented **inside codraw** as the *2nd*
 independent CRDT instance (Engram is the 1st). We do **not** refactor mature,
 shipping Engram to feed this. The shared package is extracted only when a **3rd**
 consumer (INSTINCT / Aiko) wants it — and Engram migrates onto the proven core
@@ -98,7 +98,7 @@ consumer (INSTINCT / Aiko) wants it — and Engram migrates onto the proven core
 
 ## Consequences
 
-- domain_visualiser gets conflict-free multi-user editing without an
+- codraw gets conflict-free multi-user editing without an
   authority-rule / echo-suppression design (CRDT makes re-apply idempotent).
 - The JSON Schema is the **vocabulary-alignment artifact** to put in front of
   AMR / Imagineering: agree the envelope before anyone writes engine code.

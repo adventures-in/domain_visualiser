@@ -2,12 +2,12 @@
 /// or edge, plus the CRDT metadata needed to merge concurrent edits.
 ///
 /// This is the *substrate type* that several apps in the Melbourne AI-builder
-/// community are independently reinventing (domain_visualiser's canvas, Engram's
+/// community are independently reinventing (codraw's canvas, Engram's
 /// knowledge graph, Aiko's pipeline graphs). The design goal is that the same
 /// bytes can cross the wire between any of them: **generic in transit, typed at
 /// the app edge** (the "hybrid" pole — see docs/adr/0001-graph-envelope.md).
 ///
-/// It is deliberately implemented *here, inside domain_visualiser* rather than
+/// It is deliberately implemented *here, inside codraw* rather than
 /// in a shared package. By the rule of three, this is the 2nd independent
 /// instantiation of the CRDT pattern (Engram is the 1st); the shared engine is
 /// extracted only when a 3rd consumer wants it. Copying the pattern now keeps
@@ -64,7 +64,7 @@ class FieldStamp {
 /// atomic granularity at which last-writer-wins is applied.
 ///
 /// This is the crux of the envelope. "Per-field LWW" is simultaneously too
-/// coarse and too fine: domain_visualiser's `left/top/right/bottom` must move as
+/// coarse and too fine: codraw's `left/top/right/bottom` must move as
 /// *one* unit or a concurrent drag+drag tears the box across replicas, while
 /// `name` is its own independent unit so Alice can rename a box while Bob drags
 /// it without either edit clobbering the other. The grain is an *app-level*

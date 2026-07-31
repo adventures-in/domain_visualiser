@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/extensions/firebase/firebase_auth_extensions.dart';
-import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
-import 'package:domain_visualiser/models/auth/apple_id_credential.dart';
-import 'package:domain_visualiser/models/auth/auth_user_data.dart';
-import 'package:domain_visualiser/models/auth/google_sign_in_credential.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/extensions/firebase/firebase_auth_extensions.dart';
+import 'package:codraw/extensions/redux/actions_stream_controller_extensions.dart';
+import 'package:codraw/models/auth/apple_id_credential.dart';
+import 'package:codraw/models/auth/auth_user_data.dart';
+import 'package:codraw/models/auth/google_sign_in_credential.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';

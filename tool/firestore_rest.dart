@@ -9,7 +9,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:domain_visualiser/graph/class_box_schema.dart'
+import 'package:codraw/graph/class_box_schema.dart'
     show classBoxesCollection;
 
 const String projectId = 'domain-visualiser-app';

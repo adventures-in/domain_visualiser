@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:domain_visualiser/actions/domain-objects/store_class_boxes_action.dart';
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/graph/agent_draw_envelope.dart';
-import 'package:domain_visualiser/graph/community_projection.dart';
-import 'package:domain_visualiser/graph/hlc_manager.dart';
-import 'package:domain_visualiser/sync/firestore_backend.dart';
-import 'package:domain_visualiser/sync/sync_section.dart';
+import 'package:codraw/actions/domain-objects/store_class_boxes_action.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/graph/agent_draw_envelope.dart';
+import 'package:codraw/graph/community_projection.dart';
+import 'package:codraw/graph/hlc_manager.dart';
+import 'package:codraw/sync/firestore_backend.dart';
+import 'package:codraw/sync/sync_section.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 

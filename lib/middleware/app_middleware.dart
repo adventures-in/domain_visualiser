@@ -1,19 +1,19 @@
-import 'package:domain_visualiser/middleware/app-init/plumb_streams.dart';
-import 'package:domain_visualiser/middleware/auth/observe_auth_state.dart';
-import 'package:domain_visualiser/middleware/auth/sign_in_with_apple.dart';
-import 'package:domain_visualiser/middleware/auth/sign_in_with_google.dart';
-import 'package:domain_visualiser/middleware/auth/sign_out.dart';
-import 'package:domain_visualiser/middleware/domain-objects/add_class_box_middleware.dart';
-import 'package:domain_visualiser/middleware/domain-objects/clear_class_boxes_middleware.dart';
-import 'package:domain_visualiser/middleware/domain-objects/update_domain_middleware.dart';
-import 'package:domain_visualiser/middleware/platform/detect_platform.dart';
-import 'package:domain_visualiser/middleware/shared/connect_data_stream_middleware.dart';
-import 'package:domain_visualiser/middleware/shared/disconnect_data_stream_middleware.dart';
-import 'package:domain_visualiser/models/app-state/app_state.dart';
-import 'package:domain_visualiser/services/auth_service.dart';
-import 'package:domain_visualiser/services/platform_service.dart';
-import 'package:domain_visualiser/sync/graph_sync_backend.dart';
-import 'package:domain_visualiser/graph/hlc_manager.dart';
+import 'package:codraw/middleware/app-init/plumb_streams.dart';
+import 'package:codraw/middleware/auth/observe_auth_state.dart';
+import 'package:codraw/middleware/auth/sign_in_with_apple.dart';
+import 'package:codraw/middleware/auth/sign_in_with_google.dart';
+import 'package:codraw/middleware/auth/sign_out.dart';
+import 'package:codraw/middleware/domain-objects/add_class_box_middleware.dart';
+import 'package:codraw/middleware/domain-objects/clear_class_boxes_middleware.dart';
+import 'package:codraw/middleware/domain-objects/update_domain_middleware.dart';
+import 'package:codraw/middleware/platform/detect_platform.dart';
+import 'package:codraw/middleware/shared/connect_data_stream_middleware.dart';
+import 'package:codraw/middleware/shared/disconnect_data_stream_middleware.dart';
+import 'package:codraw/models/app-state/app_state.dart';
+import 'package:codraw/services/auth_service.dart';
+import 'package:codraw/services/platform_service.dart';
+import 'package:codraw/sync/graph_sync_backend.dart';
+import 'package:codraw/graph/hlc_manager.dart';
 import 'package:redux/redux.dart';
 
 /// Middleware is used for a variety of things:

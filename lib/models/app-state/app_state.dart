@@ -1,13 +1,13 @@
-import 'package:domain_visualiser/enums/auth/auth_step_enum.dart';
-import 'package:domain_visualiser/models/auth/auth_user_data.dart';
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
-import 'package:domain_visualiser/models/navigation/page_data/page_data.dart';
-import 'package:domain_visualiser/models/problems/problem.dart';
-import 'package:domain_visualiser/models/profile/profile_data.dart';
-import 'package:domain_visualiser/models/settings/settings.dart';
+import 'package:codraw/enums/auth/auth_step_enum.dart';
+import 'package:codraw/models/auth/auth_user_data.dart';
+import 'package:codraw/models/domain-objects/domain_object.dart';
+import 'package:codraw/models/navigation/page_data/page_data.dart';
+import 'package:codraw/models/problems/problem.dart';
+import 'package:codraw/models/profile/profile_data.dart';
+import 'package:codraw/models/settings/settings.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:domain_visualiser/converters/ilist_converters.dart';
+import 'package:codraw/converters/ilist_converters.dart';
 
 part 'app_state.freezed.dart';
 part 'app_state.g.dart';

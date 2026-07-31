@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/firebase_options.dart';
-import 'package:domain_visualiser/widgets/app-init/app_widget.dart';
+import 'package:codraw/firebase_options.dart';
+import 'package:codraw/widgets/app-init/app_widget.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 

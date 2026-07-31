@@ -1,7 +1,7 @@
-import 'package:domain_visualiser/actions/navigation/push_page_action.dart';
-import 'package:domain_visualiser/extensions/flutter/context_extensions.dart';
-import 'package:domain_visualiser/models/navigation/page_data/page_data.dart';
-import 'package:domain_visualiser/widgets/shared/checked_circle_avatar.dart';
+import 'package:codraw/actions/navigation/push_page_action.dart';
+import 'package:codraw/extensions/flutter/context_extensions.dart';
+import 'package:codraw/models/navigation/page_data/page_data.dart';
+import 'package:codraw/widgets/shared/checked_circle_avatar.dart';
 import 'package:flutter/material.dart';
 
 class ProfileAvatar extends StatelessWidget {
