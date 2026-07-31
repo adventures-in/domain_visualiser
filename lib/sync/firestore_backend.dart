@@ -1,16 +1,16 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:domain_visualiser/actions/domain-objects/store_class_boxes_action.dart';
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/sync/sync_section.dart';
-import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
-import 'package:domain_visualiser/graph/class_box_schema.dart';
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart'
+import 'package:codraw/actions/domain-objects/store_class_boxes_action.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/sync/sync_section.dart';
+import 'package:codraw/extensions/redux/actions_stream_controller_extensions.dart';
+import 'package:codraw/graph/class_box_schema.dart';
+import 'package:codraw/models/domain-objects/domain_object.dart'
     show ClassBox;
-import 'package:domain_visualiser/graph/graph_envelope.dart';
-import 'package:domain_visualiser/graph/hlc_manager.dart';
-import 'package:domain_visualiser/sync/graph_sync_backend.dart';
+import 'package:codraw/graph/graph_envelope.dart';
+import 'package:codraw/graph/hlc_manager.dart';
+import 'package:codraw/sync/graph_sync_backend.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 

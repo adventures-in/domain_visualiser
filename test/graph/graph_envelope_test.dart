@@ -1,7 +1,7 @@
-import 'package:domain_visualiser/graph/graph_envelope.dart';
+import 'package:codraw/graph/graph_envelope.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// domain_visualiser's ClassBox grain: geometry moves as one unit, label and
+/// codraw's ClassBox grain: geometry moves as one unit, label and
 /// each list are independent units. This is the declaration the engine honours.
 const _classBoxSchema = NodeSchema(
   type: 'ClassBox',

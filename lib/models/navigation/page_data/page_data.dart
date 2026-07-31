@@ -1,4 +1,4 @@
-import 'package:domain_visualiser/models/problems/problem.dart';
+import 'package:codraw/models/problems/problem.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'page_data.freezed.dart';

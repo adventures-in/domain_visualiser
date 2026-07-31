@@ -1,7 +1,7 @@
-import 'package:domain_visualiser/graph/agent_draw_envelope.dart';
-import 'package:domain_visualiser/graph/class_box_schema.dart' show envelopeKey;
-import 'package:domain_visualiser/graph/graph_envelope.dart' show FieldStamp;
-import 'package:domain_visualiser/graph/hlc_manager.dart';
+import 'package:codraw/graph/agent_draw_envelope.dart';
+import 'package:codraw/graph/class_box_schema.dart' show envelopeKey;
+import 'package:codraw/graph/graph_envelope.dart' show FieldStamp;
+import 'package:codraw/graph/hlc_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Proves the create-vs-update CRUX: on re-ingest, the agent's masked UPDATE

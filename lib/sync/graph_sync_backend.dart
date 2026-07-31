@@ -1,6 +1,6 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/sync/sync_section.dart';
-import 'package:domain_visualiser/graph/graph_envelope.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/sync/sync_section.dart';
+import 'package:codraw/graph/graph_envelope.dart';
 
 /// A backend that persists graph nodes and streams remote changes back into
 /// the Redux store.

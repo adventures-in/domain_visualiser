@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:domain_visualiser/models/app-state/app_state.dart';
-import 'package:domain_visualiser/utils/redux_bundle.dart';
-import 'package:domain_visualiser/utils/store_operation.dart';
-import 'package:domain_visualiser/widgets/app-init/app_widget.dart';
+import 'package:codraw/models/app-state/app_state.dart';
+import 'package:codraw/utils/redux_bundle.dart';
+import 'package:codraw/utils/store_operation.dart';
+import 'package:codraw/widgets/app-init/app_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:redux_remote_devtools/redux_remote_devtools.dart';
 

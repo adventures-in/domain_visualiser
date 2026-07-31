@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
+import 'package:codraw/models/domain-objects/domain_object.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

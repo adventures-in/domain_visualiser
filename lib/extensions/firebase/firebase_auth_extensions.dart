@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:domain_visualiser/actions/auth/store_auth_user_data_action.dart';
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/extensions/redux/actions_stream_controller_extensions.dart';
-import 'package:domain_visualiser/models/auth/apple_id_credential.dart';
-import 'package:domain_visualiser/models/auth/auth_provider_data.dart';
-import 'package:domain_visualiser/models/auth/auth_user_data.dart';
+import 'package:codraw/actions/auth/store_auth_user_data_action.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/extensions/redux/actions_stream_controller_extensions.dart';
+import 'package:codraw/models/auth/apple_id_credential.dart';
+import 'package:codraw/models/auth/auth_provider_data.dart';
+import 'package:codraw/models/auth/auth_user_data.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';

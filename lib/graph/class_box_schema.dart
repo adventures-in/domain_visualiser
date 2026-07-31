@@ -1,4 +1,4 @@
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
+import 'package:codraw/models/domain-objects/domain_object.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 
 import 'container_schema.dart';

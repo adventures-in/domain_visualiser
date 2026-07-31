@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/models/auth/auth_user_data.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/models/auth/auth_user_data.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'store_auth_user_data_action.freezed.dart';

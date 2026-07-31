@@ -1,4 +1,4 @@
-name: domain_visualiser
+name: codraw
 description: Draw diagrams to visualise a domain.
 
 publish_to: 'none'

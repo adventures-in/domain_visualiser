@@ -1,6 +1,6 @@
-import 'package:domain_visualiser/actions/problems/remove_problem_action.dart';
-import 'package:domain_visualiser/extensions/flutter/context_extensions.dart';
-import 'package:domain_visualiser/models/problems/problem.dart';
+import 'package:codraw/actions/problems/remove_problem_action.dart';
+import 'package:codraw/extensions/flutter/context_extensions.dart';
+import 'package:codraw/models/problems/problem.dart';
 import 'package:flutter/material.dart';
 
 /// Creates a widget to show an error from a type of [Problem].

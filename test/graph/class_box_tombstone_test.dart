@@ -1,6 +1,6 @@
-import 'package:domain_visualiser/graph/class_box_schema.dart';
-import 'package:domain_visualiser/graph/graph_envelope.dart';
-import 'package:domain_visualiser/graph/hlc_manager.dart';
+import 'package:codraw/graph/class_box_schema.dart';
+import 'package:codraw/graph/graph_envelope.dart';
+import 'package:codraw/graph/hlc_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The "clear" control tombstones every visible box via [classBoxTombstone].

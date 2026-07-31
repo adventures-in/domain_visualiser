@@ -1,8 +1,8 @@
-import 'package:domain_visualiser/actions/platform/detect_platform_action.dart';
-import 'package:domain_visualiser/actions/settings/update_settings_action.dart';
-import 'package:domain_visualiser/extensions/redux/store_extensions.dart';
-import 'package:domain_visualiser/models/app-state/app_state.dart';
-import 'package:domain_visualiser/services/platform_service.dart';
+import 'package:codraw/actions/platform/detect_platform_action.dart';
+import 'package:codraw/actions/settings/update_settings_action.dart';
+import 'package:codraw/extensions/redux/store_extensions.dart';
+import 'package:codraw/models/app-state/app_state.dart';
+import 'package:codraw/services/platform_service.dart';
 import 'package:redux/redux.dart';
 
 class DetectPlatformMiddleware

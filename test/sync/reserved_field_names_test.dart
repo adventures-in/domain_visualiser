@@ -1,9 +1,9 @@
-import 'package:domain_visualiser/sync/sync_section.dart';
-import 'package:domain_visualiser/graph/agent_draw_envelope.dart';
-import 'package:domain_visualiser/graph/class_box_schema.dart';
-import 'package:domain_visualiser/graph/graph_envelope.dart';
-import 'package:domain_visualiser/graph/hlc_manager.dart';
-import 'package:domain_visualiser/sync/firestore_backend.dart';
+import 'package:codraw/sync/sync_section.dart';
+import 'package:codraw/graph/agent_draw_envelope.dart';
+import 'package:codraw/graph/class_box_schema.dart';
+import 'package:codraw/graph/graph_envelope.dart';
+import 'package:codraw/graph/hlc_manager.dart';
+import 'package:codraw/sync/firestore_backend.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 

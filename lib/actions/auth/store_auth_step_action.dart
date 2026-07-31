@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/enums/auth/auth_step_enum.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/enums/auth/auth_step_enum.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'store_auth_step_action.freezed.dart';

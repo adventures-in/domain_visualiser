@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:domain_visualiser/graph/community_projection.dart';
+import 'package:codraw/graph/community_projection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Loads the FIXED captured GitHub fixture and parses it into the projection's

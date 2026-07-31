@@ -1,9 +1,9 @@
-import 'package:domain_visualiser/actions/domain-objects/add_class_box_action.dart';
-import 'package:domain_visualiser/actions/domain-objects/update_domain_action.dart';
-import 'package:domain_visualiser/extensions/drawing/rect_extensions.dart';
-import 'package:domain_visualiser/extensions/extensions.dart';
-import 'package:domain_visualiser/extensions/flutter/context_extensions.dart';
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
+import 'package:codraw/actions/domain-objects/add_class_box_action.dart';
+import 'package:codraw/actions/domain-objects/update_domain_action.dart';
+import 'package:codraw/extensions/drawing/rect_extensions.dart';
+import 'package:codraw/extensions/extensions.dart';
+import 'package:codraw/extensions/flutter/context_extensions.dart';
+import 'package:codraw/models/domain-objects/domain_object.dart';
 import 'package:flutter/material.dart';
 
 class DrawingCanvas extends StatefulWidget {

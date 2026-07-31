@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/models/navigation/page_data/page_data.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/models/navigation/page_data/page_data.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'push_page_action.freezed.dart';

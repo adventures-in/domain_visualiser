@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/models/problems/problem.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/models/problems/problem.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'remove_problem_action.freezed.dart';

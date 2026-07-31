@@ -1,9 +1,9 @@
-import 'package:domain_visualiser/actions/domain-objects/update_domain_action.dart';
-import 'package:domain_visualiser/graph/class_box_schema.dart';
-import 'package:domain_visualiser/graph/hlc_manager.dart';
-import 'package:domain_visualiser/models/app-state/app_state.dart';
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
-import 'package:domain_visualiser/sync/graph_sync_backend.dart';
+import 'package:codraw/actions/domain-objects/update_domain_action.dart';
+import 'package:codraw/graph/class_box_schema.dart';
+import 'package:codraw/graph/hlc_manager.dart';
+import 'package:codraw/models/app-state/app_state.dart';
+import 'package:codraw/models/domain-objects/domain_object.dart';
+import 'package:codraw/sync/graph_sync_backend.dart';
 import 'package:redux/redux.dart';
 
 /// Persists an update to an existing ClassBox **as a partial stamped envelope**

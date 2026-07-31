@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/enums/settings/theme_brightness_enum.dart';
-import 'package:domain_visualiser/models/settings/theme_colors.dart';
+import 'package:codraw/enums/settings/theme_brightness_enum.dart';
+import 'package:codraw/models/settings/theme_colors.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'theme_set.freezed.dart';

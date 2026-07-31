@@ -1,5 +1,5 @@
-import 'package:domain_visualiser/actions/redux_action.dart';
-import 'package:domain_visualiser/models/domain-objects/domain_object.dart';
+import 'package:codraw/actions/redux_action.dart';
+import 'package:codraw/models/domain-objects/domain_object.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'update_domain_action.freezed.dart';
