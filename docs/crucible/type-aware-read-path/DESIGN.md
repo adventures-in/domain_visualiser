@@ -439,3 +439,73 @@ OPEN-1 id/edge-id grammar pinned, (c) ADR-0003 amended to match `community_proje
 contradiction). **Slices 0–2 are cleared to build** (reader-side, cage-match-per-slice).
 Slice 3 needs the T12 decision + OPEN-1 pin, then a round-3 re-temper on that delta. The
 folds above are un-struck.
+
+## Temper — round 3 (final recast; the smell becomes the finding, PR #19)
+
+Full 4-panel (Maxwell + Kelvin + Carnot + Tesla). **All three adversaries
+REQUEST_CHANGES, converged** on **T13** and a scoping correction. This is the
+crucible's last allowed recast (round 3 of ≤3).
+
+**T13 (converged fatal — a flaw in T12's own fix):** the reader stamps `'ClassBox'`
+for BOTH an absent `_type` and an explicit `_type:'ClassBox'`, so "local absent-default
+ClassBox" is **not a runtime predicate on `local.type`** — the asymmetry the T12
+upgrade rule depends on is erased at materialization. A hostile `_type:'Person'` on an
+id a human explicitly created as ClassBox would be mis-read as legitimate migration →
+the forgery vector T12 existed to close reopens one level down.
+
+**Scoping correction (Tesla):** the upgrade branch is reachable in **Slice 1** (the
+moment `personSchema`/`repoSchema` register + a same-id typed fixture exists), NOT
+Slice-3-only. Round-2's "Slices 0-2 clean" was too generous: **only Slice 0** (the
+ClassBox-only registry refactor, no typed schema registered, no upgrade branch
+reachable) is genuinely clean.
+
+**The architecture smell — and the decision to STOP patching.** FOLD-1 → T1/T2 → T12 →
+T13: each fix to the type-transition logic spawned the next flaw on the same field.
+Per `feedback_complexity_hotspot_is_architecture_smell` + `concept_remove_coupling_
+not_guard_window`, that is the signal to **revert and fix the contract, not the Nth
+consumer** — NOT to add a `typeWasExplicit` provenance bit (guard-the-window) and fire a
+round 4 (also past the ≤3 bound). The fire itself surfaced the decoupled contract:
+
+**Corrected typed-merge contract (folded — the adversaries' own recommendation; replaces
+the T12 merge-time upgrade rule):**
+1. **Wire law:** `ClassBox ⟺ absent _type`. Writers MUST NOT emit explicit
+   `_type:'ClassBox'`; a doc carrying `_type:'ClassBox'` is quarantined. Then every
+   in-memory ClassBox *is* the upgradable default by construction — T13 dissolved, no
+   provenance bit.
+2. **Write-mask law:** the typed producer (Slice 3 ingest, and any typed rewrite) writes
+   ONLY agent-owned units (`profile`/`meta`/`weight`) + `_type`, NEVER `geometry`.
+   Generalizes the existing `agentLabelUpdateDoc` masked-update discipline. Human drags
+   survive by construction — "preserve geometry" becomes a write invariant, not a
+   merge-time claim.
+3. **Single mutator:** one `mergeNodeAdmittingUpgrade(local, incoming, registry)` is the
+   sole absorb/write path; the "3 merge sites each remember the exception" shape (T12 as
+   written) is guard-the-window and is removed.
+4. **Shared geometry-unit invariant:** the `geometry` unit name + fields
+   (`left,top,right,bottom`) are byte-identical across ClassBox/Person/Repo schemas
+   (assert in a test); label→profile is incoming-wins on upgrade.
+5. **Named tradeoff (integrity, owner: Nick to accept):** an unauthenticated peer can
+   upgrade ANY ClassBox id (incl. a human UML box) to Person/Repo — id prefix is
+   advisory. Hostility begins only at explicit→explicit flips. If unacceptable, gate the
+   upgrade by an id-grammar allowlist (`gh-person-*`/`gh-repo-*`) or writer principal.
+   This is a *capability*, not a DoS leak (per-doc, batch survives).
+
+**Also folded round 3:** node-id alphabet must forbid `__` (or the 3-segment edge grammar
+is positional with a hard reject) so `contrib__<p>__<r>` never re-ambiguates; the atomic
+publish must version `(latestNodes, latestEdges)` from immutable accepted maps (never two
+store dispatches exposing a stale join); the upgrade path enters the SAME dry-run/
+quarantine door (new failure-class rows: malformed upgrade candidate, missing compatible
+geometry unit, id-inconsistent upgrade, legacy rewrite after upgrade).
+
+**Temper verdict (round 3, final):**
+- **Slice 0 (ClassBox-only registry refactor) — TEMPERED, blade-ready.** Survived three
+  strikes; the only findings against it were refinements (atomic-publish snapshot def,
+  a Slice-2 detail). Zero-behavior-change, cage-match-by-law on the code. Build it.
+- **Slices 1+ (typed merge + upgrade + producer flip) — recast budget EXHAUSTED with the
+  corrected contract (wire-law + write-mask + single-mutator) folded but UN-STRUCK.** The
+  ≤3 bound is reached and the architecture smell says the merge-time upgrade rule was the
+  wrong shape — so the corrected contract needs a FRESH design pass + its own temper, not
+  a 4th fold here. The wire-law/write-mask invariants are the right shape (independently
+  proposed by 3 families), but "right shape, un-struck" ≠ "survived the fire."
+
+**Blade scope:** plan-mode covers **Slice 0 only**. Slices 1+ get a new /crucible (or
+design+cage-match) pass on the corrected typed-merge contract before build.
