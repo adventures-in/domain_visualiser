@@ -187,6 +187,15 @@ class FirestoreBackend implements GraphSyncBackend {
     // this is the only behavioural change in Slice 0, and it is a no-op for today's
     // data. `_type` is identity, not payload, so it is stripped like `envelopeKey`.
     //
+    // ZERO-BEHAVIOUR SCOPE (Carnot, cage-match PR #20): this holds for app-written
+    // docs — no producer emits `_type` (all domain fields are unprefixed; the `_`
+    // prefix is reserved-by-convention for envelope metadata, like `_envelope`). A
+    // stored doc that happened to carry a `_type` payload field WOULD change
+    // behaviour (opaque data before → discriminator now). That set is believed
+    // empty but is ASSERTED, not proven against prod — the proof is a pre-deploy
+    // audit of the `domain-objects` collection, tracked as a task and gated on the
+    // Slice-3 deploy (this refactor is undeployed).
+    //
     // ABSENT vs PRESENT-MALFORMED (Carnot, cage-match PR #20): only a genuinely
     // ABSENT `_type` falls back to ClassBox. A PRESENT-but-non-string value
     // (explicit `null`, a number, …) is a malformed discriminator, NOT absence —
