@@ -20,7 +20,7 @@ breaking the PR#13 DoS boundary.
 ### The one atypical element (the load-bearing elegance)
 
 **The type discriminator lives IN the CRDT envelope, and its ABSENCE means
-`ClassBox`.** Wire docs declare `_envelope.type` (single-underscore, reserved-name
+`ClassBox`.** Wire docs declare `_type` (single-underscore, reserved-name
 safe). The registry's lookup for a missing/unknown-at-read type defaults to
 `classBox`. Consequence: **every existing prod doc and every future human-drawn
 box needs zero migration** — backward compatibility falls out of the default
@@ -73,9 +73,9 @@ Schemas from ADR-0003 (authority-partitioned units):
 
 ### Read-path dispatch (the merge-core generalization)
 
-- `_readGraphNodeFromDoc` reads `_envelope['type']` → `node.type` (default
+- `_readGraphNodeFromDoc` reads the sibling `_type` field → `node.type` (default
   `'ClassBox'` when absent). This is the ONLY behavioral change in Slice 0, and it
-  is a no-op for every current doc (none carry `_envelope.type`).
+  is a no-op for every current doc (none carry `_type`).
 - The 3 merge sites call `mergeNodes(a, b, registry.nodeSchemaFor(a.type))`.
   Because `a.type` now flows from the wire, `mergeNodes`' existing
   `schema.type != local.type` fail-closed guard becomes *live* — a Person doc
@@ -108,9 +108,9 @@ projection math — RESEARCH §5).
 - **Slice 0 — registry refactor, ZERO behavior change (cage-match tier).**
   Introduce `SchemaRegistry` with ClassBox the only registered node type; route
   the 3 merge sites + door through it; `_readGraphNodeFromDoc` reads
-  `_envelope.type` defaulting to ClassBox. All 116 tests green, byte-identical
+  `_type` defaulting to ClassBox. All 116 tests green, byte-identical
   behavior. Independently useful: unblocks everything, reviewable alone. **RED
-  proof:** a test doc carrying `_envelope.type:'Person'` with an unregistered
+  proof:** a test doc carrying `_type:'Person'` with an unregistered
   schema must quarantine cleanly (breadcrumb, no throw, batch survives).
 - **Slice 1 — typed nodes read + projected (still box-rendered).** Register
   `personSchema`/`repoSchema`; project to `PersonNode`/`RepoNode` carrying real
@@ -129,7 +129,7 @@ projection math — RESEARCH §5).
 - **Trust boundary re-opened** (read/merge core) → **cage-match by law**, every
   slice touching it. Owner: me (author) + cross-family adversary.
 - **Injection surface:** unchanged shape — untrusted remote docs; the new attack
-  is a **forged/unknown `_envelope.type`**. Mitigation IN the design: unknown type
+  is a **forged/unknown `_type`**. Mitigation IN the design: unknown type
   → quarantine at the door; type present but mismatched vs id-derived expectation
   is *not* trusted (id prefix is advisory, the envelope type is authoritative but
   still must project-or-quarantine).
@@ -149,7 +149,7 @@ projection math — RESEARCH §5).
    over-built. (Rebuttal in hand: ClassBox has no such fields and its units don't
    match; but strike it.)
 2. **Absence-means-ClassBox is safe backward compat.** Assumes no existing prod
-   doc carries `_envelope.type`. Falsifier: any doc already does → Slice 0 is not
+   doc carries `_type`. Falsifier: any doc already does → Slice 0 is not
    zero-behavior. (Mitigation: grep prod / assert in the acceptance test.)
 3. **Edge sync can be a sibling listener with no cross-collection ordering.**
    Assumes a `contribution` edge referencing a not-yet-arrived Person node renders
@@ -193,10 +193,10 @@ projection math — RESEARCH §5).
   silently mis-merges a future `'Comment'` doc under ClassBox instead of skipping
   it, leaking the DoS boundary through the registry. **Fix (folded):** the
   *reader* distinguishes them, not the registry lookup:
-  - `_envelope.type` **absent** → `type = 'ClassBox'` (backward compat; a
+  - `_type` **absent** → `type = 'ClassBox'` (backward compat; a
     registered type — merges normally).
-  - `_envelope.type` **present + registered** → that schema.
-  - `_envelope.type` **present + NOT registered** → the door quarantines
+  - `_type` **present + registered** → that schema.
+  - `_type` **present + NOT registered** → the door quarantines
     (skip+breadcrumb, never throw). This is *also* forward-compat: an older client
     skips a newer node kind gracefully.
   So `_readGraphNodeFromDoc` sets type from the wire (default ClassBox when
@@ -240,7 +240,7 @@ projection math — RESEARCH §5).
   first/last `:`), but pin it. **Also amend `community_projection.dart` + ADR-0003
   together so the two-source drift (shipped hyphen vs ADR colon) is closed, not
   papered.**
-- **[OPEN-2] Does `_envelope.type` belong inside the stamps envelope or as a
+- **[OPEN-2] Does `_type` belong inside the stamps envelope or as a
   sibling reserved `_type` field?** Leaning: sibling `_type` (envelope stays
   purely `{stamps:...}`; type is identity-adjacent like `id`, not CRDT metadata).
 - **[OPEN-3] Dangling-edge render policy** (endpoint not yet arrived): skip vs
@@ -339,3 +339,63 @@ and still needs a code cage-match per slice (Slice 0 + every merge-core-touching
 = cage-match by law). A round-2 re-temper on the folded design is warranted before
 Blade if the changes are to count as "survived the fire" (round 1's APPROVE was on the
 *pre-fold* design; the folds are un-struck).
+
+## Temper — round 2 (re-strike on the folded design, PR #19)
+
+Panel: Maxwell + Carnot (GPT) + Tesla (Grok); Kelvin killed by the review timeout
+(0 bytes) → 2-adversary strike, but **both converged**, so the verdict is decisive.
+**Verdicts: Carnot + Tesla REQUEST_CHANGES.** Round 2 of ≤3.
+
+**The fatal, NEW, converged finding (T12 — a flaw my own round-1 folds INTRODUCED):**
+OPEN-1's leaning ("reuse `gh-person-<id>` ids") **contradicts** T8 ("type immutable;
+same-id type flip → quarantine"). The 16 prod docs are ClassBox-typed (absent `_type`)
++ carry human geometry. Slice 3 writes `_type:'Person'` on the *same id* → `mergeNodes`
+fails closed on `ClassBox != Person` → the Person write **quarantines forever**. The
+security door (hostile flip → Q) and the legitimate migration (stepping-stone → typed)
+share one disposition with **no upgrade class**. "Reuse ids + preserve geometry" is
+*logically false* under the folded invariants. This is why re-tempering a fold matters:
+round 1 couldn't see a flaw the fold hadn't created yet.
+
+**Proposed resolution (T12 — asymmetric upgrade; author's recommendation, un-struck):**
+ClassBox-as-absent-default is the ONLY type that may be legitimately upgraded, because
+it was never explicitly declared. So distinguish by asymmetry:
+- **untyped(ClassBox) → typed** = a legal one-way **upgrade**. The reader recognizes
+  "local type is the absent-default ClassBox + incoming carries an explicit `_type`,
+  same id" as migration, adopts the new type, and — because `geometry` is a
+  unit-partitioned human-owned unit — the human's drag **survives** the upgrade.
+- **typed → different-typed** (Person→Repo, or any explicit→explicit flip) stays
+  **hostile → quarantine**.
+This removes the door/migration coupling instead of guarding it, and preserves demo
+geometry. It adds a fourth OPEN-1 matrix row: *same-id upgrade | no dup | geometry
+preserved | one-way, untyped→typed only*.
+
+**Scoping realization (the path forward — both adversaries bless it):** the T12
+contradiction bites **only Slice 3** (the producer flip). **Slices 0–2 are entirely
+reader-side** (registry + typed projection + edge vertical) and are UNAFFECTED — Carnot:
+"sound enough for Slice 0 prototype work"; Tesla: "Build Slice 0–2 only after reconciling
+`_type` … into one spine" (now done). So the buildable cut is **Slices 0–2 now** (each
+cage-match-by-law), with **Slice 3 HARD-GATED** on: (a) the T12 upgrade decision, (b)
+OPEN-1 id/edge-id grammar pinned, (c) ADR-0003 amended to match `community_projection`.
+
+**Remaining round-2 findings (folded / classified, none blocking Slices 0–2):**
+- Carnot High — type-flip on already-accepted state: entropy accounting (same cluster as
+  T12; the asymmetric-upgrade rule + "retain last-good, quarantine only the new version"
+  answers it). **Fold into T12.**
+- Carnot High — atomic commit model across the two listeners (validate→merge→project
+  candidate, then atomically publish; on failure keep prior accepted snapshot). **Fold
+  into the edge vertical / Slice 2 spec.**
+- Carnot High / Tesla — stale-edge GC after endpoint tombstone: render-skip isn't enough
+  once select/delete/export exist. **Named tradeoff** (v1.1; ADR-0003 already defers
+  tombstone GC) — store as hidden valid CRDT facts + diagnostics; agent cleanup later.
+- Carnot Medium — collapse the folded resolutions back into the main Shape/Build sections
+  so there is ONE authoritative design, not pre-fold + errata. **Do before Blade.**
+- Carnot Medium — quarantine breadcrumb throttling (bounded telemetry is part of the DoS
+  boundary). **Fold** (coalesce by failure-class/time-window).
+- Tesla — schema-epoch / registry skew across concurrent writers with different
+  registered sets. **Named tradeoff** (prophecy; name before multi-type agents ship, not
+  a Slice-0 blocker).
+
+**Temper verdict (round 2):** held at REQUEST_CHANGES on the *full* design (Slice 3
+contradiction). **Slices 0–2 are cleared to build** (reader-side, cage-match-per-slice).
+Slice 3 needs the T12 decision + OPEN-1 pin, then a round-3 re-temper on that delta. The
+folds above are un-struck.
