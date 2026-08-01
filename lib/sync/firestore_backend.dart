@@ -6,6 +6,7 @@ import 'package:codraw/actions/redux_action.dart';
 import 'package:codraw/sync/sync_section.dart';
 import 'package:codraw/extensions/redux/actions_stream_controller_extensions.dart';
 import 'package:codraw/graph/class_box_schema.dart';
+import 'package:codraw/graph/schema_registry.dart';
 import 'package:codraw/models/domain-objects/domain_object.dart'
     show ClassBox;
 import 'package:codraw/graph/graph_envelope.dart';
@@ -51,6 +52,11 @@ class FirestoreBackend implements GraphSyncBackend {
   /// This client's origin id (used for echo-suppression).
   final String _origin;
 
+  /// Maps a doc's declared `type` to its merge schema. Slice 0 registers ClassBox
+  /// alone, so behaviour is identical to the pre-registry hardwired `classBoxSchema`
+  /// — the generalization is the point, not a behaviour change.
+  final SchemaRegistry _registry;
+
   /// In-memory replica of every observed/written [GraphNode], keyed by id.
   /// Always reflects the **merged** view (local writes + remote echoes).
   final Map<String, GraphNode> _replica = {};
@@ -60,10 +66,24 @@ class FirestoreBackend implements GraphSyncBackend {
     StreamController<ReduxAction>? eventsController,
     required HlcManager hlc,
     required String origin,
+    SchemaRegistry? registry,
   })  : _firestore = database ?? FirebaseFirestore.instance,
         _eventsController = eventsController ?? StreamController<ReduxAction>(),
         _hlc = hlc,
-        _origin = origin;
+        _origin = origin,
+        _registry = registry ?? defaultRegistry;
+
+  /// The [NodeSchema] for an ALREADY-ADMITTED node type, or fail closed.
+  ///
+  /// Every merge input is a node whose type the door already admitted (a
+  /// door-validated remote doc, or a `_replica`/local node built as a registered
+  /// type), so this always resolves in practice. The `??`-throw is the structural
+  /// fail-closed backstop — NEVER a default: a null here means a type slipped past
+  /// the door, which must quarantine per-doc, not silently merge under the wrong
+  /// schema (the "guard the window" collapse the registry exists to remove).
+  NodeSchema _schemaOrThrow(String type) =>
+      _registry.nodeSchemaFor(type) ??
+      (throw StateError('no schema for admitted node type "$type"'));
 
   @override
   void connect(SyncSection section) {
@@ -141,7 +161,7 @@ class FirestoreBackend implements GraphSyncBackend {
           continue;
         }
         if (_isPureLocalEcho(incoming, existing)) continue;
-        final merged = mergeNodes(existing, incoming, classBoxSchema);
+        final merged = mergeNodes(existing, incoming, _schemaOrThrow(existing.type));
         if (!_stampsEqual(merged.stamps, existing.stamps)) {
           _replica[incoming.id] = merged;
           anyChange = true;
@@ -162,6 +182,11 @@ class FirestoreBackend implements GraphSyncBackend {
   /// still participates in the merge — it just LWWs at row grain, matching
   /// pre-task-#10 behaviour.
   GraphNode _readGraphNodeFromDoc(String id, Map<String, dynamic> data) {
+    // The type discriminator: an explicit sibling `_type`, or ABSENT → 'ClassBox'.
+    // No current writer emits `_type`, so every existing doc reads as a ClassBox —
+    // this is the only behavioural change in Slice 0, and it is a no-op for today's
+    // data. `_type` is identity, not payload, so it is stripped like `envelopeKey`.
+    final type = (data[typeKey] as String?) ?? 'ClassBox';
     final envelope = data[envelopeKey];
     if (envelope is Map) {
       final stampsRaw = (envelope['stamps'] as Map?) ?? const {};
@@ -170,19 +195,21 @@ class FirestoreBackend implements GraphSyncBackend {
         stamps[k as String] =
             FieldStamp.fromJson(Map<String, dynamic>.from(v as Map));
       });
-      final payload = Map<String, Object?>.from(data)..remove(envelopeKey);
+      final payload = Map<String, Object?>.from(data)
+        ..remove(envelopeKey)
+        ..remove(typeKey);
       return GraphNode(
         id: id,
-        type: 'ClassBox',
+        type: type,
         payload: payload,
         stamps: stamps,
       );
     }
     final stamp = FieldStamp(hlc: _hlc.issue(), origin: _origin);
-    final payload = Map<String, Object?>.from(data);
+    final payload = Map<String, Object?>.from(data)..remove(typeKey);
     return GraphNode(
       id: id,
-      type: 'ClassBox',
+      type: type,
       payload: payload,
       stamps: {NodeSchema.legacyRowUnit: stamp},
     );
@@ -219,6 +246,17 @@ class FirestoreBackend implements GraphSyncBackend {
         throw const FormatException('remote doc carries a reserved __.*__ field name');
       }
       final node = _readGraphNodeFromDoc(id, data);
+      // The new degenerate state the type-aware read path introduces: a doc
+      // declaring a type this client does not have a schema for. Quarantine it at
+      // the door (skip+breadcrumb) — NEVER merge it under the wrong schema (silent
+      // field loss) and never let it reach a merge site where _schemaOrThrow would
+      // throw mid-batch. This is DoS-safe AND forward-compatible: an older client
+      // skips a newer node kind gracefully. `type` ABSENT already resolved to the
+      // registered 'ClassBox' in _readGraphNodeFromDoc, so only a PRESENT-but-
+      // unregistered type reaches here.
+      if (!_registry.hasNodeType(node.type)) {
+        throw FormatException('unregistered node type "${node.type}"');
+      }
       // A node with NO stamps can neither order (LWW) nor echo-suppress — that is
       // corruption, not a concurrent edit. (Enveloped docs can carry an empty
       // `stamps` map; legacy/envelope-less docs always fabricate one stamp.)
@@ -343,7 +381,7 @@ class FirestoreBackend implements GraphSyncBackend {
     final localExisting = _replica[incoming.id];
     final localMerged = localExisting == null
         ? incoming
-        : mergeNodes(localExisting, incoming, classBoxSchema);
+        : mergeNodes(localExisting, incoming, _schemaOrThrow(localExisting.type));
     _replica[incoming.id] = localMerged;
     _emitProjection();
 
@@ -380,7 +418,7 @@ class FirestoreBackend implements GraphSyncBackend {
           mergedForWire = localMerged;
         } else {
           try {
-            mergedForWire = mergeNodes(remoteNode, incoming, classBoxSchema);
+            mergedForWire = mergeNodes(remoteNode, incoming, _schemaOrThrow(remoteNode.type));
           } catch (error) {
             _quarantineRemoteDoc(incoming.id, error);
             mergedForWire = localMerged;

@@ -4,7 +4,7 @@ import 'package:codraw/actions/domain-objects/store_class_boxes_action.dart';
 import 'package:codraw/actions/problems/add_problem_action.dart';
 import 'package:codraw/actions/redux_action.dart';
 import 'package:codraw/graph/agent_draw_envelope.dart';
-import 'package:codraw/graph/class_box_schema.dart' show envelopeKey;
+import 'package:codraw/graph/class_box_schema.dart' show envelopeKey, typeKey;
 import 'package:codraw/graph/graph_envelope.dart';
 import 'package:codraw/graph/hlc_manager.dart';
 import 'package:codraw/sync/firestore_backend.dart';
@@ -79,6 +79,79 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(problems, 0,
         reason: 'a malformed remote doc must not DoS the canvas via addProblem');
+
+    await probSub.cancel();
+    backend.disconnect(SyncSection.classBoxes);
+  });
+
+  // Slice 0 of the type-aware read path (#2432): the registry registers ClassBox
+  // ALONE, so a doc declaring a present-but-UNREGISTERED `_type` (e.g. 'Person')
+  // must be quarantined at the door — skipped + breadcrumb, never merged under the
+  // wrong schema (silent field loss) and never a throw that DoS's the batch. This
+  // is the new degenerate state the registry dispatch introduces; it must stay
+  // sealed. NOTE the doc is otherwise WELL-FORMED (valid envelope, stamp, geometry)
+  // so the ONLY reason it quarantines is the unregistered type.
+  test('a present-but-unregistered _type is quarantined — the batch survives',
+      () async {
+    final shared = FakeFirebaseFirestore();
+
+    await shared.doc('$path/good').set(agentClassBoxDoc(
+          hlc: HlcManager(nodeId: 'author'),
+          origin: 'author',
+          left: 0.0,
+          top: 0.0,
+          right: 100.0,
+          bottom: 60.0,
+          name: 'Good',
+        ));
+
+    // A perfectly-formed doc that merely declares an unregistered node type.
+    await shared.doc('$path/person').set({
+      typeKey: 'Person',
+      'left': 10.0,
+      'top': 10.0,
+      'right': 90.0,
+      'bottom': 90.0,
+      'name': 'Ada',
+      envelopeKey: {
+        'stamps': {
+          'geometry': {
+            'hlc': '2026-05-27T08:00:00.000Z-0001-author',
+            'origin': 'author'
+          }
+        }
+      },
+    });
+
+    final controller = StreamController<ReduxAction>.broadcast();
+    var problems = 0;
+    final probSub = controller.stream
+        .where((a) => a is AddProblemAction)
+        .listen((_) => problems++);
+
+    final backend = FirestoreBackend(
+      database: shared,
+      eventsController: controller,
+      hlc: HlcManager(nodeId: 'me'),
+      origin: 'me',
+    );
+
+    final projected = controller.stream
+        .where((a) => a is StoreClassBoxesAction)
+        .cast<StoreClassBoxesAction>()
+        .firstWhere((a) => a.boxes.any((b) => b.id == 'good'))
+        .timeout(const Duration(seconds: 5));
+    backend.connect(SyncSection.classBoxes);
+
+    final action = await projected;
+    // The good ClassBox renders...
+    expect(action.boxes.any((b) => b.id == 'good'), isTrue);
+    // ...the unregistered-type doc is skipped, not rendered as a ClassBox...
+    expect(action.boxes.any((b) => b.id == 'person'), isFalse);
+    // ...and NOTHING routed the app to ProblemPage.
+    await Future<void>.delayed(Duration.zero);
+    expect(problems, 0,
+        reason: 'an unregistered node type must quarantine, never DoS the canvas');
 
     await probSub.cancel();
     backend.disconnect(SyncSection.classBoxes);
