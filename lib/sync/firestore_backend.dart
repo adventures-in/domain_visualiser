@@ -186,7 +186,23 @@ class FirestoreBackend implements GraphSyncBackend {
     // No current writer emits `_type`, so every existing doc reads as a ClassBox —
     // this is the only behavioural change in Slice 0, and it is a no-op for today's
     // data. `_type` is identity, not payload, so it is stripped like `envelopeKey`.
-    final type = (data[typeKey] as String?) ?? 'ClassBox';
+    //
+    // ABSENT vs PRESENT-MALFORMED (Carnot, cage-match PR #20): only a genuinely
+    // ABSENT `_type` falls back to ClassBox. A PRESENT-but-non-string value
+    // (explicit `null`, a number, …) is a malformed discriminator, NOT absence —
+    // fail closed (throw → caught by the door → quarantine), never silently admit
+    // it as ClassBox. `containsKey` distinguishes absence from an explicit null the
+    // `as String?` cast would otherwise swallow into the fallback.
+    final String type;
+    if (!data.containsKey(typeKey)) {
+      type = 'ClassBox';
+    } else {
+      final raw = data[typeKey];
+      if (raw is! String) {
+        throw FormatException('_type present but not a String: $raw');
+      }
+      type = raw;
+    }
     final envelope = data[envelopeKey];
     if (envelope is Map) {
       final stampsRaw = (envelope['stamps'] as Map?) ?? const {};

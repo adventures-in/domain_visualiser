@@ -157,6 +157,69 @@ void main() {
     backend.disconnect(SyncSection.classBoxes);
   });
 
+  // A PRESENT-but-malformed `_type` (explicit null, or a non-string) is NOT
+  // absence — it must quarantine, never silently fall back to ClassBox (Carnot,
+  // cage-match PR #20: `(data[_type] as String?) ?? 'ClassBox'` swallowed an
+  // explicit null into the ClassBox fallback). Absence alone means ClassBox.
+  for (final malformed in <Object?>[null, 7]) {
+    test('a present-but-non-string _type ($malformed) is quarantined, not ClassBox',
+        () async {
+      final shared = FakeFirebaseFirestore();
+      await shared.doc('$path/good').set(agentClassBoxDoc(
+            hlc: HlcManager(nodeId: 'author'),
+            origin: 'author',
+            left: 0.0,
+            top: 0.0,
+            right: 100.0,
+            bottom: 60.0,
+            name: 'Good',
+          ));
+      await shared.doc('$path/malformed').set({
+        typeKey: malformed,
+        'left': 10.0,
+        'top': 10.0,
+        'right': 90.0,
+        'bottom': 90.0,
+        envelopeKey: {
+          'stamps': {
+            'geometry': {
+              'hlc': '2026-05-27T08:00:00.000Z-0001-author',
+              'origin': 'author'
+            }
+          }
+        },
+      });
+
+      final controller = StreamController<ReduxAction>.broadcast();
+      var problems = 0;
+      final probSub = controller.stream
+          .where((a) => a is AddProblemAction)
+          .listen((_) => problems++);
+      final backend = FirestoreBackend(
+        database: shared,
+        eventsController: controller,
+        hlc: HlcManager(nodeId: 'me'),
+        origin: 'me',
+      );
+      final projected = controller.stream
+          .where((a) => a is StoreClassBoxesAction)
+          .cast<StoreClassBoxesAction>()
+          .firstWhere((a) => a.boxes.any((b) => b.id == 'good'))
+          .timeout(const Duration(seconds: 5));
+      backend.connect(SyncSection.classBoxes);
+
+      final action = await projected;
+      expect(action.boxes.any((b) => b.id == 'good'), isTrue);
+      expect(action.boxes.any((b) => b.id == 'malformed'), isFalse,
+          reason: 'a malformed _type must not be admitted as a ClassBox');
+      await Future<void>.delayed(Duration.zero);
+      expect(problems, 0);
+
+      await probSub.cancel();
+      backend.disconnect(SyncSection.classBoxes);
+    });
+  }
+
   // The trust boundary has TWO read doors, not one: the absorb path (above) AND
   // the _writeMerged transaction, which reads the current on-wire doc when a
   // local edit lands. A poison doc at an id a user later edits must NOT throw
