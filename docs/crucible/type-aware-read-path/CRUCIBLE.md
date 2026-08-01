@@ -6,10 +6,19 @@
 
 Generalize `FirestoreBackend`'s read/merge/project path from a single hardwired
 `classBoxSchema` to a **type → NodeSchema/EdgeSchema registry**, and add the
-missing **edge sync vertical**, so the 16 community docs already sitting in
-production Firestore (PR #16) stop being generic UML boxes and render as
-**distinct typed Person/Repo nodes joined by contribution edges** on the live
-canvas.
+missing **edge sync vertical**, so the community graph stops being generic UML
+boxes and renders as **distinct typed Person/Repo nodes joined by contribution
+edges** on the live canvas.
+
+> **Correction (Temper, Carnot's finding #4):** the 16 docs in production
+> Firestore (PR #16) are the **ClassBox stepping stone** (geometry + name), NOT
+> typed ADR-0003 Person/Repo docs. A read registry alone (Slices 0–2) cannot
+> recover `profile`/`meta`/`commits` fields that were **never written**. The typed
+> result therefore requires BOTH the read registry AND the producer flip (Slice 3
+> re-writes the ingest to emit typed docs). "Already in prod" describes the
+> stepping-stone boxes, not the typed nodes — the earlier framing conflated the
+> two. Split cleanly: *registry* = read typed docs correctly; *producer flip* =
+> create them.
 
 ## Why this thrills me — AND what it changes
 

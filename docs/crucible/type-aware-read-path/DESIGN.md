@@ -31,17 +31,30 @@ zero-behavior-change refactor.
 
 ```dart
 // lib/graph/schema_registry.dart  (new — the single source of truth)
+//
+// TEMPER-REVISED (Carnot+Tesla consensus, findings T1/T2): the registry lookup is
+// TOTAL OVER REGISTERED TYPES ONLY. There is NO public unknown→ClassBox (or
+// unknown→contribution) fallback — that was "guard the window", a collapse any
+// call site past the door could silently reopen. Absence-means-ClassBox lives in
+// EXACTLY ONE place: the reader (_readGraphNodeFromDoc), which stamps the type
+// 'ClassBox' onto a doc that carries no _type. By the time any code asks the
+// registry for a schema, the type is a concrete admitted string.
 class SchemaRegistry {
   const SchemaRegistry(this._nodes, this._edges);
   final Map<String, NodeSchema> _nodes;
   final Map<String, EdgeSchema> _edges;
 
-  /// Absent/unknown type → the ClassBox default (backward compat + fail-soft).
-  NodeSchema nodeSchemaFor(String type) => _nodes[type] ?? classBoxSchema;
-  EdgeSchema edgeSchemaFor(String type) => _edges[type] ?? contributionSchema;
+  /// Null iff [type] is not registered — callers MUST treat null as "quarantine",
+  /// never substitute a default. (The door checks this before any merge/project.)
+  NodeSchema? nodeSchemaFor(String type) => _nodes[type];
+  EdgeSchema? edgeSchemaFor(String type) => _edges[type];
   bool hasNodeType(String type) => _nodes.containsKey(type);
+  bool hasEdgeType(String type) => _edges.containsKey(type);
 }
 
+// ClassBox is registered like any other type — the reader's absence-default names
+// it explicitly, the registry does not privilege it. Edges have NO default: there
+// are zero legacy edge docs, so an absent/unknown edge type is always a quarantine.
 final defaultRegistry = SchemaRegistry(
   { 'ClassBox': classBoxSchema, 'Person': personSchema, 'Repo': repoSchema },
   { 'contribution': contributionSchema },
@@ -189,9 +202,10 @@ projection math — RESEARCH §5).
   So `_readGraphNodeFromDoc` sets type from the wire (default ClassBox when
   absent); `_tryReadValidNode` checks `registry.hasNodeType(node.type)` and
   quarantines an unregistered present type BEFORE the projection dry-run.
-  `nodeSchemaFor` still defaults to classBoxSchema, but it is only ever reached
-  for a type the door already admitted. Verified: no current writer emits a type
-  field (grep of all 3 writers), so the "absent → ClassBox" branch covers 100% of
+  `nodeSchemaFor` returns `NodeSchema?` and is null for an unadmitted type — see
+  the Temper revision (T1): the registry has **no** ClassBox fallback; absence is
+  resolved only in the reader. Verified: no current writer emits a type field
+  (grep of all 3 writers), so the "absent → ClassBox" branch covers 100% of
   today's docs — Slice 0 stays provably behavior-neutral.
 - **[FOLD-2] A tombstoned endpoint is also an unresolved endpoint.** OPEN-3's
   dangling-edge skip must treat `endpoint.isDeleted == true` the same as
@@ -206,13 +220,26 @@ projection math — RESEARCH §5).
 
 ## Open variables (named, not skated)
 
-- **[OPEN-1] Id-scheme migration.** Reuse existing `gh-person-<id>` ids in the
-  typed schema (violates ADR-0003's `gh:<id>` form but avoids duplication), OR
-  tombstone the 16 stepping-stone docs and re-create under `gh:<id>` (clean but a
-  destructive prod write on the demo canvas). **Leaning: reuse the existing ids
-  and amend ADR-0003's id form to what shipped** (hyphen not colon — colon is also
-  fine as a Firestore doc id, but the stepping stone already chose hyphen). Decide
-  before Slice 3. This is the single most likely thing to bite the demo.
+- **[OPEN-1 → HARD GATE before Slice 3] Id-scheme migration.** *Elevated from
+  "open lean" to a blocking gate by Carnot+Tesla consensus — Slice 3 is NOT a
+  done-condition while this is undecided.* Blast radius is larger than "duplicate
+  every node" (Tesla): the id is the CRDT document's identity, so it also
+  **triples** into `contrib:<personId>:<repoId>` edge ids, and a tombstone+recreate
+  under a new scheme **destroys human-owned geometry** on the demo canvas (ingest
+  writes agent totals, it does not restore peer geometry edits). Decide via this
+  matrix, before any Slice-3 prod write:
+
+  | option | node dup? | edge id impact | human geometry | verdict |
+  |---|---|---|---|---|
+  | **reuse shipped `gh-person-<id>`, amend ADR-0003** | none | edge id derives from existing ids, consistent | preserved | **leaning** |
+  | migrate → `gh:<id>`, tombstone old | none (old tombstoned) | edges must re-derive under new ids | **DESTROYED** (re-create loses geometry unit) | rejected for the demo |
+  | dual-write both id forms | **doubles** | ambiguous | split | forbidden |
+
+  Reuse also forces a decision on the edge-id separator, since `contrib:A:B` with
+  `A=gh-person-1` gives `contrib:gh-person-1:gh-repo-2` — parseable (split on
+  first/last `:`), but pin it. **Also amend `community_projection.dart` + ADR-0003
+  together so the two-source drift (shipped hyphen vs ADR colon) is closed, not
+  papered.**
 - **[OPEN-2] Does `_envelope.type` belong inside the stamps envelope or as a
   sibling reserved `_type` field?** Leaning: sibling `_type` (envelope stays
   purely `{stamps:...}`; type is identity-adjacent like `id`, not CRDT metadata).
@@ -220,3 +247,95 @@ projection math — RESEARCH §5).
   ghost. Leaning: skip (safest for DoS), revisit for liveliness.
 - **[OPEN-4] CanvasNode/CanvasEdge as freezed sum vs plain sealed classes** —
   ergonomics only, no correctness weight.
+
+## Temper — round 1 (cross-family design cage-match, PR #19)
+
+Panel: Maxwell + Kelvin (Gemini) + Carnot (GPT) + Tesla (Grok); Wu (Kimi)
+dark-seated (CLI not installed). **Verdicts: Kelvin APPROVE; Carnot + Tesla
+REQUEST_CHANGES** — held, correctly (no consensus-approve). None of the findings
+dissolved the ore; the registry remains load-bearing (confirmed by the
+silent-field-loss reframe AND the closed-schema pin, T5 below). Round 1 of ≤3.
+
+**Ledger — every finding classified, all folded (none deferred, none rejected):**
+
+| # | finding | raisers | real? | fold |
+|---|---|---|---|---|
+| T1 | `nodeSchemaFor => ?? classBoxSchema` is guard-the-window, not remove-the-coupling — a call site past the door reopens silent field loss | Carnot+Tesla | yes | Shape revised: `NodeSchema?`, no default; absence only in reader |
+| T2 | edge twin unsealed: `edgeSchemaFor => ?? contributionSchema`; edges have zero legacy docs → **no** default at all | Carnot+Tesla | yes | Shape revised: `EdgeSchema?`, absent/unknown edge type always quarantines |
+| T3 | OPEN-1 is a hard gate before Slice 3; blast radius = edge-id tripling + human-geometry destruction | Carnot+Tesla | yes | OPEN-1 elevated + decision matrix above |
+| T4 | "already in prod" conflates ClassBox stepping-stone docs with typed ADR docs; Slices 0-2 can't render typed nodes without the producer flip | Carnot | yes | CRUCIBLE.md corrected; done-condition split (below) |
+| T5 | claim-1 survives Temper ONLY if schemas stay CLOSED — the real shortcut is open-unit pass-through, not kind-tagging | Tesla | yes | pinned as non-negotiable invariant (below) |
+| T6 | join projection underspecified — resolve endpoints at PAINT/emit time against current node view, never drop at absorb on arrival order | Carnot+Tesla | yes | edge-render invariant pinned (below) |
+| T7 | quarantine failure-class table missing | Carnot+Tesla | yes | table added (below) |
+| T8 | OPEN-2 must be decided before Slice 0 (it IS Slice 0's only behavior change) + type is immutable after create | Carnot+Tesla | yes | decided: sibling `_type`, immutable (below) |
+| T9 | DoS claim-5: registry dispatch multiplies throw sites by \|types\| — EVERY registered projector must be total-or-caught, not just the unknown branch | Carnot+Tesla | yes | per-projector quarantine pinned (below) |
+| T10 | dual store (`nodes`/`edges` beside `classBoxes`) needs a named single paint-SoT per slice | Tesla | yes | one-paint-source rule (below) |
+| T11 | edge delete/tombstone + recreated-edge-conflict semantics only implied | Carnot | yes | noted in edge vertical (below) |
+
+**Folded resolutions:**
+
+- **[T5 — the closed-schema pin, replaces the weak claim-1 rebuttal]** The registry
+  is load-bearing because **merge is defined only over declared units**: `_mergeUnits`
+  does not carry payload fields for a unit absent from `fieldsOf`, so an unknown unit
+  advances its stamp but **drops its fields**. Therefore a render-only `kind`
+  discriminator (which would need *open-unit pass-through* to keep Person fields
+  through the merge) is not a lighter alternative — it is a **different, weaker CRDT**
+  that abandons ADR-0003's closed authority partition. **Non-negotiable invariant:
+  schemas stay closed ⇒ the registry is load-bearing for MERGE, not paint.** This is
+  the precise falsifier-closure; the earlier "ClassBox has no such fields" rebuttal was
+  necessary but not the crux.
+- **[T6 — edge-render invariant]** Both `.snapshots()` listeners feed a single
+  projection over `(latestAcceptedNodes, latestAcceptedEdges)`. Endpoint resolution
+  happens **at emit/paint time against the current node view**, never at absorb —
+  independent listeners deliver in any order, so a "missing endpoint" at absorb is a
+  lag artifact, not a fact. Render an edge iff both endpoints are present AND neither
+  `isDeleted` (subsumes FOLD-2). Edge projection must never depend on listener arrival
+  order.
+- **[T7 — quarantine failure-class table]** Every remote-input failure gets an explicit
+  disposition (Q = quarantine skip+breadcrumb; A = accept):
+
+  | class | disposition |
+  |---|---|
+  | `_type` absent | A as `ClassBox` |
+  | `_type` present + registered | A under its schema |
+  | `_type` present + unregistered | **Q** |
+  | malformed `_type` (non-string) | **Q** |
+  | same-id type flip (local ClassBox vs remote Person) → `mergeNodes` `schema.type!=` StateError | **Q** (door, never batch) |
+  | missing/empty stamps, blank origin/hlc, unparseable hlc | **Q** (existing door) |
+  | malformed geometry (`left:"banana"`) | **Q** (projection dry-run) |
+  | reserved `__.*__` field name | **Q** (existing door) |
+  | edge: absent/unknown type | **Q** (no default) |
+  | edge: endpoint absent or tombstoned | **render-skip** (not quarantine — the doc is valid, just unresolvable this frame) |
+  | edge: divergent identity tuple `(id,type,from,to)` | **Q** (mergeEdges StateError) |
+
+- **[T8 — wire discriminator decided]** Sibling reserved `_type` field (NOT inside
+  `_envelope`), single-underscore, reserved-name safe. **Type is immutable after
+  create** (identity-adjacent, like `id`) — a hostile overwrite of `_type` that flips
+  a node's type surfaces as the `mergeNodes` type-mismatch StateError, which the door
+  quarantines. Decided **before Slice 0** because Slice 0's behavior-neutral proof and
+  the prod-grep assertion both depend on the exact field path.
+- **[T9 — per-projector DoS]** The door's contract is "**every** registered projector
+  is total-or-caught", not merely `hasNodeType`. Each registered type's projection
+  dry-run AND its `mergeNodes`/`mergeEdges` call stay inside the per-doc
+  try/quarantine. Adding a type adds a projector = adds throw sites; the RED proof set
+  covers unknown-type, registered-type-with-hostile-payload, and same-id-type-flip.
+- **[T10 — single paint-SoT during dual store]** Each slice names ONE paint source;
+  the other store field is derived or frozen. Slice 4 *deletes* the shadow
+  (`classBoxes`), it is not a second migration. No slice paints from two authorities.
+- **[T11 — edge lifecycle]** The edge vertical specifies: a tombstone merge rule
+  (reuse `EdgeSchema.tombstoneUnit`), a painter exclusion rule (T6), and — because a
+  "moved" edge is delete+recreate under a new id — a recreated-edge is a distinct
+  document, so no re-point conflict exists by construction (matches `mergeEdges`
+  fail-closed on divergent identity).
+
+**Revised done-condition (T4 split):** *registry (Slices 0–2)* = typed ADR docs, when
+present, merge and project without field loss; *producer flip (Slice 3)* = the ingest
+writes typed docs so they exist to be read. The projector demo ("typed nodes + edges on
+the live canvas") is reachable only after **both**, gated behind OPEN-1.
+
+**Temper verdict (round 1):** design-only, held at REQUEST_CHANGES → all findings
+folded. **Scope stamp:** this verdict is on the DESIGN; the implementation is UNPROVEN
+and still needs a code cage-match per slice (Slice 0 + every merge-core-touching slice
+= cage-match by law). A round-2 re-temper on the folded design is warranted before
+Blade if the changes are to count as "survived the fire" (round 1's APPROVE was on the
+*pre-fold* design; the folds are un-struck).
