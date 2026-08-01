@@ -81,10 +81,32 @@ Schemas from ADR-0003 (authority-partitioned units):
   `schema.type != local.type` fail-closed guard becomes *live* — a Person doc
   merges under `personSchema`, and a corrupt/forged type mismatch fails closed
   into the existing per-doc quarantine (not the batch).
+- **The one-way upgrade rule (normative — resolves the migration/forgery
+  collision).** A type mismatch on the same id is NOT uniformly hostile. Exactly
+  one transition is a legitimate migration: **local type is the absent-default
+  `ClassBox` AND the incoming doc carries an explicit `_type`.** The absent-default
+  is the only upgradeable type precisely because it was never *declared* — nothing
+  was asserted to contradict. So the merge sites apply:
+  - `local.type == 'ClassBox'` (absent-default) **and** `incoming.type` is an
+    explicit registered type → **adopt `incoming.type`**: re-key the local node's
+    type and merge under the incoming schema. The human-owned `geometry` unit is
+    a *separate merge unit*, so the drag survives the upgrade untouched (this is
+    the ADR-0003 authority partition paying off — geometry is not coupled to the
+    agent-owned typed units). One-way only: an upgraded node's type is now explicit
+    and can never be re-flipped.
+  - `local.type` is any *explicit* type and `incoming.type` differs (Person→Repo,
+    Person→ClassBox-explicit, …) → **hostile → quarantine** (the existing
+    `mergeNodes` StateError, caught per-doc).
+  This distinguishes migration from forgery by the asymmetry of *declared vs
+  defaulted*, with no separate trust flag. The RED proof set covers both arms:
+  ClassBox→Person accepts + preserves geometry; Person→Repo quarantines.
 - **New degenerate state → DoS door update:** `_tryReadValidNode` must dry-run
   the *type-appropriate* projection. Unknown-but-present type → quarantine
   (skip+breadcrumb), never throw. `_emitProjection` dispatches projection by type,
-  keeping its per-node fail-closed backstop.
+  keeping its per-node fail-closed backstop. **Bounded telemetry (part of the DoS
+  boundary):** quarantine breadcrumbs coalesce by `(failure-class, time-window)`
+  so a hostile collection of thousands of unknown-type docs cannot turn a no-throw
+  boundary into unbounded log churn.
 
 ### Projection + store
 
@@ -102,6 +124,17 @@ comment already anticipates this) + `contributionSchema` + `IList<CanvasEdge>` +
 painter draws each edge as a line clipped to the endpoint rects (anchor = center,
 endpoint = center projected to rect boundary; variable Person size handled by the
 projection math — RESEARCH §5).
+
+**Atomic publish model (normative — the two-listener commit contract).** The node
+and edge listeners are independent, but the store sees ONE converged view. Each
+absorb runs validate→merge→project on a *candidate*, then atomically publishes the
+accepted `(nodes, edges)` snapshot; on a per-doc failure it preserves the previous
+accepted snapshot for that doc (retain-last-good) and quarantines only the failed
+candidate — a projector failure for one type never poisons the prior good
+projection, and edges never paint against a half-updated node map. Endpoint
+resolution is at **emit/paint time** over the current joined view (skip an edge iff
+an endpoint is absent OR tombstoned), never an absorb-time drop keyed on listener
+arrival order.
 
 ## Build order (core-first, each step independently useful, no big-bang)
 
@@ -231,15 +264,21 @@ projection math — RESEARCH §5).
 
   | option | node dup? | edge id impact | human geometry | verdict |
   |---|---|---|---|---|
-  | **reuse shipped `gh-person-<id>`, amend ADR-0003** | none | edge id derives from existing ids, consistent | preserved | **leaning** |
+  | **reuse shipped `gh-person-<id>`, amend ADR-0003 + one-way upgrade** | none | edge id derives from existing ids, consistent | preserved (upgrade rule) | **CHOSEN** |
   | migrate → `gh:<id>`, tombstone old | none (old tombstoned) | edges must re-derive under new ids | **DESTROYED** (re-create loses geometry unit) | rejected for the demo |
   | dual-write both id forms | **doubles** | ambiguous | split | forbidden |
 
-  Reuse also forces a decision on the edge-id separator, since `contrib:A:B` with
-  `A=gh-person-1` gives `contrib:gh-person-1:gh-repo-2` — parseable (split on
-  first/last `:`), but pin it. **Also amend `community_projection.dart` + ADR-0003
-  together so the two-source drift (shipped hyphen vs ADR colon) is closed, not
-  papered.**
+  **Resolution (chosen):** reuse the shipped `gh-person-<id>`/`gh-repo-<id>` node
+  ids; the same-id ClassBox→typed transition is handled by the **one-way upgrade
+  rule** (read-path dispatch, above), so geometry is preserved and nothing
+  duplicates. **Edge-id grammar (pinned):** `contrib__<personId>__<repoId>` using a
+  double-underscore joiner rather than `:` — node ids already contain `-` and could
+  contain other separators, so a fixed unambiguous joiner beats a "split on
+  first/last `:`" convention that a second producer would drift. (`__` is legal in a
+  Firestore doc id; only the wrapping `__x__` reserved pattern is forbidden, which
+  `contrib__a__b` does not match.) **Amend `community_projection.dart` + ADR-0003
+  Decision 3 together** so the shipped ids ARE the ADR (hyphen node ids,
+  double-underscore edge ids) — closing the two-source drift, not papering it.
 - **[OPEN-2] Does `_type` belong inside the stamps envelope or as a
   sibling reserved `_type` field?** Leaning: sibling `_type` (envelope stays
   purely `{stamps:...}`; type is identity-adjacent like `id`, not CRDT metadata).
@@ -300,7 +339,8 @@ silent-field-loss reframe AND the closed-schema pin, T5 below). Round 1 of ≤3.
   | `_type` present + registered | A under its schema |
   | `_type` present + unregistered | **Q** |
   | malformed `_type` (non-string) | **Q** |
-  | same-id type flip (local ClassBox vs remote Person) → `mergeNodes` `schema.type!=` StateError | **Q** (door, never batch) |
+  | same-id upgrade: local absent-default `ClassBox` + incoming explicit `_type` | **A as upgrade** (adopt incoming type; geometry unit survives) |
+  | same-id flip: local *explicit* type + different incoming type (Person→Repo, …) | **Q** (hostile; `mergeNodes` StateError, per-doc) |
   | missing/empty stamps, blank origin/hlc, unparseable hlc | **Q** (existing door) |
   | malformed geometry (`left:"banana"`) | **Q** (projection dry-run) |
   | reserved `__.*__` field name | **Q** (existing door) |
