@@ -54,6 +54,16 @@ final NodeSchema classBoxSchema = withContainerUnits(const NodeSchema(
 /// one is tracked as a follow-up (defensive `FieldStamp.fromJson`).
 const String envelopeKey = '_envelope';
 
+/// Reserved wire field naming a doc's node-type discriminator (e.g. `'Person'`).
+/// Sibling of [envelopeKey], NOT nested inside it: type is create-time identity
+/// (like `id`), not mutable CRDT metadata. Single-underscore prefix so it is not
+/// caught by Firestore's reserved `__.*__` rejection (see reserved_field_names_test).
+///
+/// **ABSENCE means `ClassBox`.** No current writer emits this field, so every
+/// existing doc reads as a ClassBox — the type-aware read path (#2432) is a no-op
+/// for today's data. A reader strips it from the payload alongside [envelopeKey].
+const String typeKey = '_type';
+
 /// The Firestore collection ClassBox nodes live in. Declared here (pure Dart) as
 /// the single source of truth so both `FirestoreBackend.locationOf` (the reader)
 /// and the headless agent writer (`tool/agent_draw.dart`, which can't import the
