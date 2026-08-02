@@ -295,3 +295,65 @@ A = accept; U = accept-as-upgrade; RS = render-skip):
 and the residual is a named tradeoff. F1 (commutativity) is the crux — if it
 survives with a clean resolution folded in, the contract is blade-ready for
 Slice 1.
+
+---
+
+## Temper — round 1 (four-family design cage-match, PR #21)
+
+Panel: Maxwell (author) + Kelvin (Gemini) + Tesla (Grok) + Wu (Kimi). Carnot
+(GPT-5.5 xhigh) hung mid-strike (stalled re-reading generated `freezed.dart`;
+retired — its absence does not change a unanimous verdict). **Verdicts: Kelvin,
+Tesla, Wu ALL REQUEST_CHANGES, decisively converged.** Round 1 of ≤3.
+
+**The converged fatal — F-A (the crux; all three families, independently):**
+`GraphNode.type` is **immutable identity with NO stamp** (`graph_envelope.dart:247-259`),
+so the type transition is resolved by **arrival/processing order, never LWW**.
+- Multi-explicit race (base ClassBox + upgrade→Person + upgrade→Repo, same id):
+  `ClassBox→Person→Repo` ends **Person**; reversed ends **Repo** — permanent
+  divergence between replicas (Kelvin, Tesla; Tesla simulated it 50/50).
+- Worse on the write path (Wu): `_writeMerged` **catches** the explicit→explicit
+  `StateError` (`firestore_backend.dart:445-450`) and writes the local merge back,
+  so a local Person writer **clobbers** a remote Repo.
+- The design's "first-writer-wins by HLC" residual (claim #1) **has no mechanism
+  in the code** — there is no `_type` stamp to order. My symmetric-upgrade fix
+  **relocated the coupling into the re-key, did not remove it.** This is the same
+  type-field hotspot as `FOLD-1 → T1/T2 → T12 → T13`, one level down — the 5th
+  consecutive failure on the same field.
+
+**Converged supporting findings:**
+- **F-B [FATAL, Tesla + Wu] — the durable write never serializes `_type`.**
+  `_toFirestoreDoc` (`firestore_backend.dart:459-475`) spreads `payload` +
+  `_envelope` only, never `typeKey`; and `classBoxToGraphNodePartial` emits
+  `type:'ClassBox'` on a human drag. So even a correct in-memory upgrade is not
+  durable — cold readers re-materialize ClassBox, agent fields orphan.
+- **F-C [FATAL/HIGH, all three] — the shared human-owned unit set is
+  insufficient.** `classBoxSchema` + `withContainerUnits` carry `label`, four UML
+  list units, `parent`, `containerType`, `zIndex` (`class_box_schema.dart:28-38`,
+  `container_schema.dart:49`); the designed `personSchema`/`repoSchema` keep only
+  `geometry`+`curation`+`profile`/`meta`. On upgrade these human units leave the
+  contract (orphaned, not projected). Also `curation` is NOT on ClassBox today —
+  my Law-4 "byte-identical across all three" is internally inconsistent.
+  Correction (Tesla): `_mergeUnits:208` does not *delete* unknown-unit fields;
+  they linger as orphans — the loss is contract/projection, not a line-208 strip.
+- **F-D [MED, Tesla] — the door projectability dry-run is ClassBox-hardcoded**
+  (`_tryReadValidNode` always `graphNodeToClassBox`, `:311`). A registered-Person
+  doc with a Person-illegal payload is not validated at the trust boundary; the
+  design's S9 "door dry-run before mutator" is false for typed schemas until the
+  dry-run dispatches by type.
+- **Enforce Law 1 at BOTH doors (Wu):** the reader `FormatException` on explicit
+  `_type:'ClassBox'` must land on the absorb reader AND the tx-read path, or T13
+  reopens.
+- Not falsified: claim #5 (edge paint-time resolution) and claim #6 (edge/slice
+  independence) held; claim #2's predicate is operationally OK once the Law-1
+  throw lands (prose "provenance" overstated, not fatal).
+
+**Verdict (round 1): REQUEST_CHANGES, unanimous. The merge-time-upgrade shape is
+confirmed dead (5th strike on the type field).** Per
+`concept_remove_coupling_not_guard_window` + `feedback_complexity_hotspot_is_
+architecture_smell`, the resolution is NOT a round-2 fold on another merge-time
+patch — it is to change what `type` IS. The root coupling: **`type` is treated
+as immutable identity while the upgrade feature requires it to change.** Two
+clean ways to remove it — a stamped-LWW type field, or an id-derived
+deterministic type — are a design fork that changes the identity/security model
+and reverses the v1 "id-prefix advisory" rejected-alternative, so it is escalated
+to Nick before round 2.
