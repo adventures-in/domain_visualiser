@@ -590,3 +590,66 @@ sound.** The upgrade mutator stays deleted; the resolution is distinct-ids +
 two standalone latent-bug fixes + the enum's type-preserving writes. None
 reintroduces a merge-time type transition. The fixes are un-struck → round-3
 re-strike on the folded contract before Blade.
+
+---
+
+## Temper — round 3 (final; four-family strike on the FOLDED resolution, PR #21)
+
+Panel: Kelvin (Gemini) + Tesla (Grok) + Wu (Kimi) + Carnot (GPT-5.5) — all four
+completed. **Unanimous REQUEST_CHANGES, but converged on a precise verdict:**
+*the SHAPE is blade-ready; the cross-doc MIGRATION fold is not yet a fixpoint —
+its invariants are "promises, not enforced protocol" (Carnot).* No new flaw
+against the contract itself; every finding is a concrete, bounded protocol line
+on the migration, NOT a design fork. ≤3-round budget now HIT.
+
+**What SURVIVED the final strike (validated):**
+- **Deleting the merge-time upgrade mutator is correct** (all four explicit).
+- **Distinct typed ids make the same-id ClassBox→Person identity merge
+  STRUCTURALLY unreachable** — CRUX-1 genuinely killed for migration (Tesla,
+  Carnot).
+- **R-FIX-2's abort is safe for legitimate concurrency** — `mergeNodes` throws
+  only on divergent identity / wrong schema / equal-stamp-divergent-payload, none
+  of which a legitimate same-type edit hits (Tesla, Carnot, Wu independently).
+- **R-FIX-5's exhaustive no-`default` `switch (NodeType)` closes F-D** (Tesla).
+
+**Converged residuals → the concrete fold (Slice-scoped, no new fork):**
+- **[Slice 1] The store/projection must RETAIN `NodeType`.** The deepest finding
+  (Tesla): the Redux `DomainObject` model defaults `type:'ClassBox'`
+  (`domain_object.dart:14`) and `graphNodeToClassBox` drops the type — so a
+  post-migration drag rebuilds a ClassBox regardless of an enum on `GraphNode`.
+  **Fix:** project to a typed `CanvasNode` (Person/Repo/ClassBox) that carries
+  `NodeType`; the write path sources type from `_replica[id].type`, never the UI
+  model. Enum-on-GraphNode alone is insufficient.
+- **[Slice 1] R-FIX-3 covers EVERY hardcoded-type writer** — writer census
+  (Tesla/Carnot): `classBoxToGraphNodePartial:139` AND `classBoxTombstone:159`
+  both hardcode ClassBox; the tombstone path was uncovered. RED: drag AND clear on
+  a Person emit Person-typed.
+- **[Slice 1] R-FIX-2 identity-specific + no optimistic mis-apply** — the catch at
+  `:447-450` also traps equal-stamp corruption (must discriminate); the pre-tx
+  optimistic `_replica` apply (`:406-411`) and absorb's retain-last-good
+  (`:145-150`) must not persist a local type across an identity mismatch.
+- **[Slice 3] R-FIX-1 atomic cutover** — 16 tombstones + 16 typed creates in ONE
+  multi-doc transaction (or hard-delete the hyphen docs); RED: no stable client
+  state ever shows both id families (else transient/permanent 32-node render).
+- **[Slice 3] R-FIX-4 is a promise, not protocol** — a `clear`/drag during the
+  producer's non-atomic RMW loses the human edit. **Fork (Nick's call):** either
+  (i) atomic multi-doc cutover + write-reject on retired `gh-person-*`/`gh-repo-*`
+  ids during cutover, or (ii) accept a NAMED RESIDUAL — "concurrent human edits on
+  stepping-stone ids during the migration window may be dropped," blast radius =
+  demo window only, all 16 docs currently 100% agent-origin.
+- **[Slice 3] Edges migrate with the nodes** — producer mints only colon-endpoint
+  contribution edges; zero legacy edge docs today, so this is a producer
+  requirement, not a live migration (build Slice 2 edges against final colon ids,
+  or don't land them before cutover).
+
+**Verdict (round 3, final — ≤3 budget hit):**
+- **SHAPE: TEMPERED / blade-ready.** Survived three rounds by four families;
+  delete-mutator + immutable-`NodeType` + distinct-ids is validated.
+- **Slice 1 (reader-side typed projection): BLADE-READY** with the folded Slice-1
+  requirements above (typed `CanvasNode` store + type-sourced writes + all writers
+  type-preserving + identity-specific fail-closed write path). Buildable now,
+  cage-match-by-law on the code. Independent of the Slice-3 migration fork.
+- **Slice 2 (edge vertical): BLADE-READY** with the colon-endpoint build-order
+  constraint.
+- **Slice 3 (producer migration): the protocol fold is its build spec** — atomic
+  cutover + the (i)/(ii) fork above. Gated, built last, its own cage-match.
