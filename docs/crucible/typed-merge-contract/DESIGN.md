@@ -357,3 +357,161 @@ clean ways to remove it — a stamped-LWW type field, or an id-derived
 deterministic type — are a design fork that changes the identity/security model
 and reverses the v1 "id-prefix advisory" rejected-alternative, so it is escalated
 to Nick before round 2.
+
+---
+
+# RECAST v2 — the collapsed contract (post-live-audit)
+
+*This section SUPERSEDES the 5-law contract above. That contract, and all five
+Temper rounds against it, existed to solve one problem: migrate the ClassBox
+stepping-stone community docs to typed nodes **while preserving human geometry**.
+A live-prod audit (below) proves that problem does not exist. The upgrade
+machinery is deleted, not fixed.*
+
+## The falsifying evidence (live prod, codraw.ink `domain-objects`, audited)
+
+27 real docs. The 16 community docs (`gh-person-*` ×10, `gh-repo-*` ×6) each carry
+exactly `{_envelope, geometry(left/top/right/bottom), name, userId}` — **no
+`_type`, no typed fields** (no login/avatarUrl/commits). Decisive: **every stamp
+on every `gh-*` doc has `origin == 'agent-github'`** (the producer) for BOTH the
+`geometry` and `label` units. Verified programmatically: `16/16 gh-* docs, every
+stamp origin == agent-github → True`.
+
+**Consequence:** no human has ever dragged or renamed a community node. There is
+**zero human-owned data** on the docs the upgrade was built to protect. The v1
+OPEN-1 matrix rejected "tombstone + recreate" because it "DESTROYS human
+geometry" — that rejection's premise is **false for the real data**. The cheap
+option was rejected on an unverified premise.
+
+## The contract
+
+1. **`type` is a `NodeType` enum, and it is IMMUTABLE identity — unchanged from
+   the shipped core.** `mergeNodes`' `(id, type)` identity guard
+   (`graph_envelope.dart:254`) stays exactly as-is. There is **no upgrade, no
+   type stamp, no LWW-on-type, no merge-time re-key, no id-prefix parsing.** The
+   entire class of flaws (FOLD-1 → F-A) is deleted with the machinery that caused
+   it.
+2. **The wire carries a `_type` string; the reader parses it to `NodeType?` at
+   the door.** `absent → NodeType.classBox` (backward compat, live from Slice 0);
+   `present + parseable + registered → that variant`; `present + unparseable /
+   unregistered / explicit 'ClassBox' → quarantine`. The `String → NodeType?`
+   parse **is** the trust-boundary admission check — a typo or hostile string
+   yields null → quarantine, never a wrong-schema merge. Downstream dispatch
+   (projection, door dry-run) is an **exhaustive `switch (NodeType)`** — the
+   compiler forbids a missing case (kills finding F-D structurally).
+3. **A node's type is decided ONCE, at create time, by its writer, and never
+   changes.** The producer writes `_type:'Person'`/`'Repo'`; a human-drawn box
+   writes absent (`ClassBox`). Same id never legitimately changes type.
+4. **Migration = tombstone-and-recreate, not merge.** Slice 3's producer
+   tombstones (or the `removed` docChange strips) the 16 absent-`_type` docs and
+   writes fresh typed docs. A client processes `removed` (strips the ClassBox
+   from `_replica`, `firestore_backend.dart:125`) **then** `added` (a clean
+   typed insert — `existing == null` branch at `:158`, no merge). **The same-id
+   type-flip merge is never reached**, so the immutable-identity guard never
+   fires. Safe *because* there is no human data to lose.
+5. **Write-mask law survives as forward hygiene (not migration machinery).** A
+   typed producer writes only agent-owned units, never `geometry`. Irrelevant to
+   the 16 docs today (agent owns everything on them); it matters the day a human
+   drags a *typed* node, so keep it — but it is not load-bearing for this
+   migration.
+
+## What each prior FATAL becomes under the recast
+
+- **F-A (multi-explicit race diverges):** DELETED. Two different explicit types on
+  one id cannot arise — type is create-time and immutable; a producer mints one
+  type per id deterministically. A hostile second type on the same id hits the
+  existing `mergeNodes` divergent-identity quarantine (a per-doc skip, the shipped
+  DoS behaviour), which is *correct* — there is no legitimate transition to
+  protect.
+- **F-B (write door doesn't serialize `_type`):** shrinks to a real but bounded
+  Slice-3 delta — `_toFirestoreDoc` must emit `typeKey` for non-ClassBox writers.
+  No in-memory upgrade to keep durable; the producer just writes the field.
+- **F-C (shared human-owned unit set insufficient):** DELETED as a *loss* risk —
+  nothing is upgraded, so no unit is dropped mid-transition. The gh-* docs have no
+  UML/container units at all. (Person/Repo schemas still declare their own units;
+  no cross-schema geometry-identity invariant is needed because no re-key occurs.)
+- **F-D (door dry-run ClassBox-hardcoded):** fixed structurally by the exhaustive
+  `switch (NodeType)` in the projectability dry-run + emit.
+
+## Code deltas (smaller than v1)
+
+| site | delta |
+|---|---|
+| `graph_envelope.dart` | introduce `enum NodeType { classBox, person, repo }` (+ `NodeType? parseNodeType(String)`); `GraphNode.type` / `NodeSchema.type` become `NodeType`. Identity guard unchanged. |
+| `schema_registry.dart` | key by `NodeType`; register person/repo. |
+| `firestore_backend.dart:206` | reader parses `_type` → `NodeType?`; absent→classBox; explicit `'ClassBox'` or unparseable/unregistered → throw → door quarantine. |
+| `firestore_backend.dart` projection | `_emitProjection` dispatches `switch (node.type)` → `PersonNode`/`RepoNode`/`ClassBoxNode`; door dry-run dispatches the same. |
+| new `community_schemas.dart` | `personSchema`/`repoSchema`/`contributionSchema` (own units; no forced geometry-identity). |
+| **NO** new mutator | `mergeNodes` untouched; the v1 `mergeNodeAdmittingUpgrade` is not built. |
+| Slice 3 `_toFirestoreDoc` | emit `typeKey` for typed writers; ingest tombstones-then-writes typed. |
+
+## Degenerate states (recast)
+
+| # | state | disposition |
+|---|---|---|
+| R1 | `_type` absent | accept ClassBox (live) |
+| R2 | `_type` present, parses to registered variant | accept under its schema |
+| R3 | `_type` present, unparseable/unregistered/explicit 'ClassBox' | **Q** (door) |
+| R4 | same-id, local ClassBox + incoming Person (NO removal between) | **Q** (mergeNodes divergent-identity — shipped) — and this only happens if a producer writes typed WITHOUT tombstoning first, which is a producer bug the Slice-3 spec forbids |
+| R5 | tombstone-then-recreate typed (the migration path) | clean: `removed` strips, `added` inserts — no merge |
+| R6 | human drags a `gh-*` node BEFORE Slice 3 | its geometry stamp becomes human-origin; then R4 would lose it → **the one caveat**: run re-ingest before inviting typed-node drags (see Fold) |
+| R7 | edge: absent/unknown type | **Q** (Slice 2) |
+
+## Fold (author self-pass on the recast)
+
+- **[RF-1 — the R6 window is the only residual, and it is operationally
+  closeable]** If a human drags a `gh-*` node between now and Slice-3 re-ingest,
+  that drag's geometry gets a human origin, and tombstone-recreate would drop it.
+  Mitigations, cheapest first: (a) run the Slice-3 re-ingest as a single
+  operation before any public invitation to edit community nodes (the nodes are
+  not individually meaningful to drag yet — they render as plain boxes today);
+  (b) the re-ingest can *read current geometry and carry it forward* on the
+  recreate (producer reads the old doc's geometry unit, writes it into the new
+  typed doc) — turning tombstone-recreate into geometry-preserving-recreate at
+  the *producer*, with no merge-core change. (b) makes R6 a non-issue entirely
+  and is cheap. **Recommend (b).**
+- **[RF-2 — R4 must be impossible-by-producer-discipline, not by merge logic]**
+  The recast's safety depends on the producer ALWAYS tombstoning before writing a
+  typed doc at a formerly-ClassBox id. If a producer writes `_type:'Person'` to a
+  live ClassBox id without removal, clients quarantine it (shipped divergent-id
+  guard) and the node vanishes for them. This is a Slice-3 producer contract +
+  RED proof (write typed-without-tombstone → assert quarantine breadcrumb), not a
+  merge-core concern. Name it so Slice 3 can't forget it.
+- **[RF-3 — enum migration is a workspace-wide type change]** `GraphNode.type`
+  String→enum touches every construction/read site (projection, tests, the
+  agent-draw envelope, community_projection). Compile-driven — the analyzer finds
+  them all — but it is the real bulk of Slice 1. Not a risk, a scope note.
+- **[RF-4 — is ClassBox-as-absent still worth keeping, or emit `_type` for all?]**
+  Keeping absent⟺ClassBox preserves Slice-0's zero-migration for human boxes
+  (they never carry `_type`). Alternative (emit `_type:'ClassBox'` explicitly)
+  would break every existing human doc's read. Keep absent⟺ClassBox. (This is the
+  ONE piece of the v1 "wire law" that survives — as a serialization default, never
+  as a dispatch/upgrade predicate.)
+
+## Claims to falsify (recast — hand to the panel)
+
+1. **The upgrade genuinely never needs to exist.** Find a REACHABLE scenario in
+   the community-graph demo (Slices 1–3) where a node must change type on the same
+   id *and* carries data that tombstone-recreate would lose — given the audited
+   fact that all 16 gh-* docs are 100% agent-origin. If R6 is the only one, is
+   RF-1(b) a complete closure?
+2. **Tombstone-recreate is race-clean.** Craft an ordering (removed/added
+   interleaved with a concurrent write from another origin) where the client ends
+   with the ClassBox and the Person both live, or neither, or a merged mongrel.
+3. **The `String→NodeType?` parse is a complete trust boundary.** Find a wire
+   `_type` value that reaches a schema/projection without passing the parse-or-
+   quarantine gate.
+4. **The exhaustive `switch (NodeType)` actually closes F-D.** Find a projection/
+   door path that dispatches on type WITHOUT the compiler forcing all cases.
+5. **Edge vertical (Slice 2) is unaffected** by the recast (it never had an
+   upgrade problem — edges have no legacy docs).
+6. **RF-2's producer discipline is sufficient** — is there a NON-producer path
+   (hostile peer, console edit) that writes a typed doc to a live ClassBox id and
+   causes worse than a per-doc quarantine?
+
+## Done-condition (recast Temper)
+
+2 consecutive rounds converge with no fatal, or ≤3 hit with a named residual.
+Expectation: this is a fraction of the v1 surface (no mutator, core untouched), so
+it should converge fast — the test is whether deleting the machinery reopened
+anything the machinery was hiding.
