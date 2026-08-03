@@ -515,3 +515,78 @@ option was rejected on an unverified premise.
 Expectation: this is a fraction of the v1 surface (no mutator, core untouched), so
 it should converge fast — the test is whether deleting the machinery reopened
 anything the machinery was hiding.
+
+---
+
+## Temper — round 2 (four-family strike on the RECAST, PR #21)
+
+Panel: Kelvin (Gemini) + Tesla (Grok) + Wu (Kimi) + Carnot (GPT-5.5, completed
+this round). **All four REQUEST_CHANGES, unanimously converged.** Round 2 of ≤3.
+Crucially, **all four agree the *shape* is right** — deleting the merge-time
+upgrade mutator is correct and the upgrade is genuinely not needed. Every finding
+is on the *migration mechanism*, not the contract. (Contrast v1, where the shape
+itself was fatal.)
+
+**Converged findings (all code-confirmed):**
+- **CRUX-1 [FATAL, 4/4] — same-id reuse is unsafe on every delivery path.**
+  Tombstone-recreate at the SAME id is not `removed`+`added`: a CRDT tombstone is
+  a `modified` (doc still exists); `disconnect()` never clears `_replica`
+  (`firestore_backend.dart:369`, confirmed); Firestore's own docs say
+  `docChanges` cache-then-server makes `removed`+`added` a non-durable contract
+  (Carnot). Any reuse path hits `existing != null` → `mergeNodes` divergent
+  identity (`graph_envelope.dart:254`) → quarantine → live replica stays ClassBox
+  while the wire is Person → **live/cold type split.**
+- **CRUX-2 [FATAL, Tesla+Wu+Carnot] — the write-path self-heal is a global
+  clobber.** `_writeMerged`'s divergent-identity catch persists `localMerged`
+  (`firestore_backend.dart:447-450`, confirmed) and `_toFirestoreDoc` omits
+  `_type` — so a stale local ClassBox edit **overwrites the remote Person on the
+  wire**, reverting the migration for everyone. A latent bug, upgrade-independent.
+- **[FATAL, Carnot] — the audit is a SNAPSHOT; `Clear all` creates human
+  liveness.** `ClearClassBoxesMiddleware` writes a human-origin `classBoxTombstone`
+  via `updateGraphNode` (confirmed) — one gesture turns "16/16 agent-origin"
+  false. Also the update middleware hardcodes `type:'ClassBox'` on every partial
+  write, so a post-migration drag clobbers the type at its source (Tesla).
+- **[HIGH, 3/4] — non-producer in-place `_type` mutation** (console/hostile) on a
+  live ClassBox id: stale clients quarantine+keep ClassBox, fresh clients
+  clean-insert Person → divergence-by-history, worse than per-doc quarantine.
+- **[HIGH, Carnot+Tesla+Wu] — F-D not structurally closed** until the enum/switch
+  actually lands AND projection dispatch stops going through the runtime schema
+  `Map`; **prior "every FATAL deleted" is retracted** — F-A/F-B write-path
+  residual survives.
+- **Survives: claim #5 (edge vertical)** — no edge-doc falsifier (edges have no
+  legacy docs, immutable `(id,type,from,to)` identity); minor rendering-context
+  caveat if an endpoint id migrates (subsumed by R-FIX-1's distinct ids).
+
+**Folded resolution (converged; introduces NO merge-time logic):**
+- **R-FIX-1 — distinct ids for typed docs (resolves OPEN-1, kills CRUX-1).** Slice
+  3 tombstones the 16 `gh-person-X`/`gh-repo-X` ClassBox stepping-stones and
+  writes fresh typed docs under **distinct** ids (ADR-0003 colon grammar: `gh:X`,
+  `repo:X`). No client ever holds a ClassBox at a typed id, so the same-id
+  divergent-identity path is **structurally unreachable** on every delivery path
+  (`modified`, cache-replay, disconnect-stale-replica all moot). ADR-0003 amended
+  so hyphen = retired stepping-stone ids, colon = live typed ids.
+- **R-FIX-2 — write-path fail-closed (kills CRUX-2).** `_writeMerged`'s
+  divergent-identity catch must ABORT the local write (quarantine, leave the wire
+  untouched), never persist `localMerged` over a differently-typed remote. RED:
+  local ClassBox + remote Person same id → local write aborts, wire Person
+  survives. Standalone latent-bug fix, correct regardless of migration.
+- **R-FIX-3 — type-preserving partial writes.** The enum migration makes
+  `classBoxToGraphNodePartial` / the update middleware carry the node's real
+  `NodeType`, not a hardcoded `'ClassBox'`. A drag on a Person writes Person-typed
+  → no post-migration clobber at the source.
+- **R-FIX-4 — sequence + carry-forward tombstone state.** Migration runs before
+  typed-node editing is invited; the producer carries forward BOTH geometry AND
+  `_deleted` tombstone state from the old doc into the new typed doc (RF-1(b)
+  extended per Carnot). Distinct ids make this a plain producer read-then-write,
+  no merge.
+- **R-FIX-5 — F-D structural rule.** Projection dry-run + emit are the SAME
+  no-`default` `switch (NodeType)`; the schema `Map` is the parse/lookup boundary
+  only, never projection dispatch; RED per variant.
+- **Required deltas (Carnot-5, Wu-3):** Law-1 throw (explicit `_type:'ClassBox'`
+  → quarantine) at the reader; the `String→NodeType?` parse at every wire door.
+
+**Verdict (round 2): REQUEST_CHANGES, unanimous — but the shape is confirmed
+sound.** The upgrade mutator stays deleted; the resolution is distinct-ids +
+two standalone latent-bug fixes + the enum's type-preserving writes. None
+reintroduces a merge-time type transition. The fixes are un-struck → round-3
+re-strike on the folded contract before Blade.
