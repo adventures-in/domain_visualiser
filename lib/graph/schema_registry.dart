@@ -1,4 +1,5 @@
 import 'class_box_schema.dart';
+import 'community_schemas.dart';
 import 'graph_envelope.dart';
 
 /// The single source of truth mapping a doc's declared `type` discriminator to
@@ -38,8 +39,20 @@ class SchemaRegistry {
 
 /// The default registry used by [FirestoreBackend] when none is injected.
 ///
-/// Slice 0: ClassBox is the only registered node type; no edge types yet.
+/// Slice 1 (#2432): `Person` and `Repo` join `ClassBox` as registered node
+/// types, so a typed community doc merges under its own schema instead of being
+/// quarantined at the door. Edge types (`contribution`) arrive in Slice 2.
+///
+/// `ClassBox` remains the absence-default resolved in the reader
+/// ([FirestoreBackend._readGraphNodeFromDoc]); the registry does not privilege
+/// it. A present-but-unregistered type still quarantines at the door — there is
+/// deliberately no unknown→default fallback (that was the "guard the window"
+/// collapse Slice 0 removed).
 final SchemaRegistry defaultRegistry = SchemaRegistry(
-  <String, NodeSchema>{'ClassBox': classBoxSchema},
+  <String, NodeSchema>{
+    'ClassBox': classBoxSchema,
+    'Person': personSchema,
+    'Repo': repoSchema,
+  },
   const <String, EdgeSchema>{},
 );

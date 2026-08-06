@@ -210,6 +210,19 @@ class FirestoreBackend implements GraphSyncBackend {
       if (raw is! String) {
         throw FormatException('_type present but not a String: $raw');
       }
+      // WIRE LAW (DESIGN Law 1): `ClassBox ⟺ absent _type`. The absent form is
+      // the ONLY legal ClassBox encoding, so an explicit `_type:'ClassBox'` is a
+      // malformed serialization — quarantine it (→ door) rather than normalize it
+      // to ClassBox. This keeps "type == 'ClassBox' in memory" sound as "came from
+      // the absence branch": a writer that never emits explicit 'ClassBox' means
+      // every in-memory ClassBox is the never-declared default, so nothing
+      // downstream can mistake a forged explicit-ClassBox for the default.
+      if (raw == 'ClassBox') {
+        throw const FormatException(
+          "_type explicitly 'ClassBox' is illegal — ClassBox is encoded by an "
+          'absent _type (wire law)',
+        );
+      }
       type = raw;
     }
     final envelope = data[envelopeKey];

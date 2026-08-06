@@ -84,13 +84,14 @@ void main() {
     backend.disconnect(SyncSection.classBoxes);
   });
 
-  // Slice 0 of the type-aware read path (#2432): the registry registers ClassBox
-  // ALONE, so a doc declaring a present-but-UNREGISTERED `_type` (e.g. 'Person')
-  // must be quarantined at the door — skipped + breadcrumb, never merged under the
-  // wrong schema (silent field loss) and never a throw that DoS's the batch. This
-  // is the new degenerate state the registry dispatch introduces; it must stay
-  // sealed. NOTE the doc is otherwise WELL-FORMED (valid envelope, stamp, geometry)
-  // so the ONLY reason it quarantines is the unregistered type.
+  // Type-aware read path (#2432): a doc declaring a present-but-UNREGISTERED
+  // `_type` must be quarantined at the door — skipped + breadcrumb, never merged
+  // under the wrong schema (silent field loss) and never a throw that DoS's the
+  // batch. This is the degenerate state the registry dispatch introduces; it must
+  // stay sealed. Slice 1 registers Person/Repo, so the stand-in for "unregistered"
+  // is now 'Comment' (a type no schema declares). NOTE the doc is otherwise
+  // WELL-FORMED (valid envelope, stamp, geometry) so the ONLY reason it
+  // quarantines is the unregistered type.
   test('a present-but-unregistered _type is quarantined — the batch survives',
       () async {
     final shared = FakeFirebaseFirestore();
@@ -106,8 +107,8 @@ void main() {
         ));
 
     // A perfectly-formed doc that merely declares an unregistered node type.
-    await shared.doc('$path/person').set({
-      typeKey: 'Person',
+    await shared.doc('$path/comment').set({
+      typeKey: 'Comment',
       'left': 10.0,
       'top': 10.0,
       'right': 90.0,
@@ -147,7 +148,7 @@ void main() {
     // The good ClassBox renders...
     expect(action.boxes.any((b) => b.id == 'good'), isTrue);
     // ...the unregistered-type doc is skipped, not rendered as a ClassBox...
-    expect(action.boxes.any((b) => b.id == 'person'), isFalse);
+    expect(action.boxes.any((b) => b.id == 'comment'), isFalse);
     // ...and NOTHING routed the app to ProblemPage.
     await Future<void>.delayed(Duration.zero);
     expect(problems, 0,
@@ -219,6 +220,135 @@ void main() {
       backend.disconnect(SyncSection.classBoxes);
     });
   }
+
+  // WIRE LAW (DESIGN Law 1, Slice 1): `ClassBox ⟺ absent _type`. An explicit
+  // `_type:'ClassBox'` is an ILLEGAL serialization (the absent form is the only
+  // legal ClassBox encoding) → quarantine, never normalize to ClassBox. This keeps
+  // "in-memory ClassBox came from the absence branch" sound, closing the forged-
+  // explicit-ClassBox vector the round-3 Temper (T13) surfaced.
+  test('an explicit _type:\'ClassBox\' is quarantined (wire law), not admitted',
+      () async {
+    final shared = FakeFirebaseFirestore();
+    await shared.doc('$path/good').set(agentClassBoxDoc(
+          hlc: HlcManager(nodeId: 'author'),
+          origin: 'author',
+          left: 0.0,
+          top: 0.0,
+          right: 100.0,
+          bottom: 60.0,
+          name: 'Good',
+        ));
+    await shared.doc('$path/explicit').set({
+      typeKey: 'ClassBox', // illegal: ClassBox must be encoded by ABSENCE
+      'left': 10.0,
+      'top': 10.0,
+      'right': 90.0,
+      'bottom': 90.0,
+      'name': 'Forged',
+      envelopeKey: {
+        'stamps': {
+          'geometry': {
+            'hlc': '2026-05-27T08:00:00.000Z-0001-author',
+            'origin': 'author'
+          }
+        }
+      },
+    });
+
+    final controller = StreamController<ReduxAction>.broadcast();
+    var problems = 0;
+    final probSub = controller.stream
+        .where((a) => a is AddProblemAction)
+        .listen((_) => problems++);
+    final backend = FirestoreBackend(
+      database: shared,
+      eventsController: controller,
+      hlc: HlcManager(nodeId: 'me'),
+      origin: 'me',
+    );
+    final projected = controller.stream
+        .where((a) => a is StoreClassBoxesAction)
+        .cast<StoreClassBoxesAction>()
+        .firstWhere((a) => a.boxes.any((b) => b.id == 'good'))
+        .timeout(const Duration(seconds: 5));
+    backend.connect(SyncSection.classBoxes);
+
+    final action = await projected;
+    expect(action.boxes.any((b) => b.id == 'good'), isTrue);
+    expect(action.boxes.any((b) => b.id == 'explicit'), isFalse,
+        reason: 'an explicit _type:ClassBox is an illegal wire form → quarantine');
+    await Future<void>.delayed(Duration.zero);
+    expect(problems, 0);
+
+    await probSub.cancel();
+    backend.disconnect(SyncSection.classBoxes);
+  });
+
+  // Slice 1 payoff: a well-formed Person doc (registered type) is ADMITTED — it
+  // merges under personSchema instead of being quarantined as an unknown type.
+  // (Typed *projection* — showing profile fields — is Slice 1b; here it renders as
+  // a box via the shared geometry/label units, proving the type is admitted and
+  // the merge path is live.)
+  test('a well-formed Person doc is admitted (registered), not quarantined',
+      () async {
+    final shared = FakeFirebaseFirestore();
+    await shared.doc('$path/gh:1').set({
+      typeKey: 'Person',
+      'login': 'ada',
+      'avatarUrl': 'https://x/a.png',
+      'htmlUrl': 'https://github.com/ada',
+      'kind': 'User',
+      'name': 'Ada',
+      'left': 10.0,
+      'top': 10.0,
+      'right': 90.0,
+      'bottom': 90.0,
+      envelopeKey: {
+        'stamps': {
+          'profile': {
+            'hlc': '2026-05-27T08:00:00.000Z-0001-author',
+            'origin': 'author'
+          },
+          'label': {
+            'hlc': '2026-05-27T08:00:00.000Z-0002-author',
+            'origin': 'author'
+          },
+          'geometry': {
+            'hlc': '2026-05-27T08:00:00.000Z-0003-author',
+            'origin': 'author'
+          },
+        }
+      },
+    });
+
+    final controller = StreamController<ReduxAction>.broadcast();
+    var problems = 0;
+    final probSub = controller.stream
+        .where((a) => a is AddProblemAction)
+        .listen((_) => problems++);
+    final backend = FirestoreBackend(
+      database: shared,
+      eventsController: controller,
+      hlc: HlcManager(nodeId: 'me'),
+      origin: 'me',
+    );
+    final projected = controller.stream
+        .where((a) => a is StoreClassBoxesAction)
+        .cast<StoreClassBoxesAction>()
+        .firstWhere((a) => a.boxes.any((b) => b.id == 'gh:1'))
+        .timeout(const Duration(seconds: 5));
+    backend.connect(SyncSection.classBoxes);
+
+    final action = await projected;
+    // The Person node is admitted and rendered (id present) — not quarantined.
+    final box = action.boxes.firstWhere((b) => b.id == 'gh:1');
+    expect(box.name, 'Ada', reason: 'the shared label unit projects the name');
+    await Future<void>.delayed(Duration.zero);
+    expect(problems, 0);
+
+    await probSub.cancel();
+    backend.disconnect(SyncSection.classBoxes);
+  });
 
   // The trust boundary has TWO read doors, not one: the absorb path (above) AND
   // the _writeMerged transaction, which reads the current on-wire doc when a
