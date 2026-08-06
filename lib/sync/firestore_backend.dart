@@ -210,6 +210,19 @@ class FirestoreBackend implements GraphSyncBackend {
       if (raw is! String) {
         throw FormatException('_type present but not a String: $raw');
       }
+      // WIRE LAW (DESIGN Law 1): `ClassBox ⟺ absent _type`. The absent form is
+      // the ONLY legal ClassBox encoding, so an explicit `_type:'ClassBox'` is a
+      // malformed serialization — quarantine it (→ door) rather than normalize it
+      // to ClassBox. This keeps "type == 'ClassBox' in memory" sound as "came from
+      // the absence branch": a writer that never emits explicit 'ClassBox' means
+      // every in-memory ClassBox is the never-declared default, so nothing
+      // downstream can mistake a forged explicit-ClassBox for the default.
+      if (raw == 'ClassBox') {
+        throw const FormatException(
+          "_type explicitly 'ClassBox' is illegal — ClassBox is encoded by an "
+          'absent _type (wire law)',
+        );
+      }
       type = raw;
     }
     final envelope = data[envelopeKey];
@@ -354,7 +367,20 @@ class FirestoreBackend implements GraphSyncBackend {
     // would sink the WHOLE canvas — so make DoS-immunity STRUCTURAL rather than
     // dependent on that invariant: a future replica-insertion path or a schema
     // cast that grows a new tooth skips the one bad node, never the batch.
-    final boxes = _replica.values.where((n) => !n.isDeleted).expand((n) {
+    //
+    // TYPE GATE (Slice 1a, #2432): project ONLY ClassBox nodes into the
+    // interactive ClassBox store. A registered Person/Repo node merges correctly
+    // in `_replica` (the merge foundation this slice ships) but must NOT become an
+    // interactive ClassBox until the write path preserves its type — otherwise a
+    // human drag/clear on that box would emit a ClassBox-typed write against a
+    // Person replica entry, hitting `mergeNodes`' divergent-identity StateError in
+    // the OPTIMISTIC pre-transaction merge (outside the tx try/catch). The typed
+    // projection + type-preserving writes that make Person/Repo safely interactive
+    // are Slice 1b; until then, skipping non-ClassBox from the projection keeps the
+    // crash surface structurally closed (cage-match PR #22: Kelvin/Tesla/Carnot).
+    final boxes = _replica.values
+        .where((n) => !n.isDeleted && n.type == 'ClassBox')
+        .expand((n) {
       try {
         return [graphNodeToClassBox(n)];
       } catch (error) {

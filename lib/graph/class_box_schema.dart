@@ -28,14 +28,32 @@ import 'hlc_manager.dart';
 final NodeSchema classBoxSchema = withContainerUnits(const NodeSchema(
   type: 'ClassBox',
   mergeUnits: {
-    'geometry': ['left', 'top', 'right', 'bottom'],
-    'label': ['name'],
+    ...humanOwnedUnits,
     'staticMethods': ['staticMethods'],
     'instanceMethods': ['instanceMethods'],
     'staticVariables': ['staticVariables'],
     'instanceVariables': ['instanceVariables'],
   },
 ));
+
+/// The **human-owned merge units** every node type shares **byte-identically**.
+///
+/// This is the structural form of the typed-merge contract's shared-unit
+/// invariant (DESIGN Law 4 / round-2 finding F-C): a human's position (`geometry`)
+/// and typed box name (`label`) live under the SAME unit names + field lists on a
+/// `ClassBox`, a `Person`, and a `Repo`. Sharing the literal (rather than
+/// re-declaring per schema) makes it impossible for two schemas to drift — a
+/// drift would silently drop the human's edit when a doc is read under a sibling
+/// schema (`_mergeUnits` carries only fields of *declared* units). Asserted deep-
+/// equal across all registered schemas by `community_schemas_test.dart`.
+///
+/// The three container units (`parent`/`containerType`/`zIndex`) are ALSO shared
+/// human-owned units, layered on separately via [withContainerUnits] so every
+/// schema that wraps with it gets them identically too.
+const Map<String, List<String>> humanOwnedUnits = {
+  'geometry': ['left', 'top', 'right', 'bottom'],
+  'label': ['name'],
+};
 
 /// Reserved key in the Firestore document holding the CRDT envelope. Keeping
 /// it under a single `_envelope` key (rather than spraying `_geom_hlc`,
