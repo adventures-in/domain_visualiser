@@ -284,13 +284,17 @@ void main() {
     backend.disconnect(SyncSection.classBoxes);
   });
 
-  // Slice 1 payoff: a well-formed Person doc (registered type) is ADMITTED — it
-  // merges under personSchema instead of being quarantined as an unknown type.
-  // (Typed *projection* — showing profile fields — is Slice 1b; here it renders as
-  // a box via the shared geometry/label units, proving the type is admitted and
-  // the merge path is live.)
-  test('a well-formed Person doc is admitted (registered), not quarantined',
-      () async {
+  // Slice 1a boundary: a well-formed Person doc (registered type) does NOT DoS the
+  // canvas — the good ClassBox still renders and nothing routes to ProblemPage —
+  // AND it is deliberately NOT projected as an interactive box yet. Rendering
+  // Person/Repo as editable boxes before the write path preserves their type would
+  // let a human drag/clear emit a ClassBox-typed write against a Person replica
+  // entry → mergeNodes divergent-identity StateError in the optimistic pre-tx merge
+  // (cage-match PR #22). Typed projection + type-preserving writes are Slice 1b;
+  // the merge-under-personSchema correctness itself is proven by
+  // community_schemas_test. Here we assert the crash surface stays closed.
+  test('a well-formed Person doc does not DoS the canvas and is not yet '
+      'rendered as an interactive box (typed projection is Slice 1b)', () async {
     final shared = FakeFirebaseFirestore();
     await shared.doc('$path/gh:1').set({
       typeKey: 'Person',
@@ -332,19 +336,36 @@ void main() {
       hlc: HlcManager(nodeId: 'me'),
       origin: 'me',
     );
+    // Seed a plain ClassBox too, so we have a positive projection signal to await
+    // (the Person is intentionally NOT projected in 1a).
+    await shared.doc('$path/good').set(agentClassBoxDoc(
+          hlc: HlcManager(nodeId: 'author'),
+          origin: 'author',
+          left: 0.0,
+          top: 0.0,
+          right: 100.0,
+          bottom: 60.0,
+          name: 'Good',
+        ));
+
     final projected = controller.stream
         .where((a) => a is StoreClassBoxesAction)
         .cast<StoreClassBoxesAction>()
-        .firstWhere((a) => a.boxes.any((b) => b.id == 'gh:1'))
+        .firstWhere((a) => a.boxes.any((b) => b.id == 'good'))
         .timeout(const Duration(seconds: 5));
     backend.connect(SyncSection.classBoxes);
 
     final action = await projected;
-    // The Person node is admitted and rendered (id present) — not quarantined.
-    final box = action.boxes.firstWhere((b) => b.id == 'gh:1');
-    expect(box.name, 'Ada', reason: 'the shared label unit projects the name');
+    // The plain ClassBox renders (batch survives)...
+    expect(action.boxes.any((b) => b.id == 'good'), isTrue);
+    // ...the Person is NOT projected as an interactive box (deferred to Slice 1b)...
+    expect(action.boxes.any((b) => b.id == 'gh:1'), isFalse,
+        reason: 'Person/Repo are not interactive-rendered until writes preserve '
+            'type (Slice 1b); rendering one now would open the write-path crash');
+    // ...and nothing routed the app to ProblemPage.
     await Future<void>.delayed(Duration.zero);
-    expect(problems, 0);
+    expect(problems, 0,
+        reason: 'a registered Person must neither DoS the batch nor crash');
 
     await probSub.cancel();
     backend.disconnect(SyncSection.classBoxes);

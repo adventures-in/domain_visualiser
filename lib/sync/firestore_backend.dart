@@ -367,7 +367,20 @@ class FirestoreBackend implements GraphSyncBackend {
     // would sink the WHOLE canvas — so make DoS-immunity STRUCTURAL rather than
     // dependent on that invariant: a future replica-insertion path or a schema
     // cast that grows a new tooth skips the one bad node, never the batch.
-    final boxes = _replica.values.where((n) => !n.isDeleted).expand((n) {
+    //
+    // TYPE GATE (Slice 1a, #2432): project ONLY ClassBox nodes into the
+    // interactive ClassBox store. A registered Person/Repo node merges correctly
+    // in `_replica` (the merge foundation this slice ships) but must NOT become an
+    // interactive ClassBox until the write path preserves its type — otherwise a
+    // human drag/clear on that box would emit a ClassBox-typed write against a
+    // Person replica entry, hitting `mergeNodes`' divergent-identity StateError in
+    // the OPTIMISTIC pre-transaction merge (outside the tx try/catch). The typed
+    // projection + type-preserving writes that make Person/Repo safely interactive
+    // are Slice 1b; until then, skipping non-ClassBox from the projection keeps the
+    // crash surface structurally closed (cage-match PR #22: Kelvin/Tesla/Carnot).
+    final boxes = _replica.values
+        .where((n) => !n.isDeleted && n.type == 'ClassBox')
+        .expand((n) {
       try {
         return [graphNodeToClassBox(n)];
       } catch (error) {
